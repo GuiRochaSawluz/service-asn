@@ -28,6 +28,9 @@ stimulsoft-service/obj/
 **/.env
 **/.env.*
 **/license.key
+**/*.db
+**/*.db-shm
+**/*.db-wal
 **/*.log
 **/.DS_Store
 **/Thumbs.db
