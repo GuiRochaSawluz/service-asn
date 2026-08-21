@@ -1,0 +1,33 @@
+# VCS
+.git
+.gitignore
+.gitattributes
+.github/
+.vscode/
+
+# Python artifacts
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.venv/
+**/venv/
+
+# Frontend artifacts
+**/node_modules/
+**/dist/
+**/.vite/
+**/coverage/
+
+# .NET build output
+stimulsoft-service/bin/
+stimulsoft-service/obj/
+
+# Local-only files
+**/.env
+**/.env.*
+**/license.key
+**/*.log
+**/.DS_Store
+**/Thumbs.db

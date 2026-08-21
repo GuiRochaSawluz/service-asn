@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<ARQUIVOEDI Nome="" Data="1899/12/30 00:00:00">
+	<ASN_SET>
+		<ASN_SUBSET>
+			<Tb_HeaderEDI>
+				<DbPadraoEDI/>
+				<DbRNDcodigo>004</DbRNDcodigo>
+				<DbEDIversao>99</DbEDIversao>
+				<DbRNDversao>99</DbRNDversao>
+				<DbDtHrMovimento>2026/01/28 09:30:35</DbDtHrMovimento>
+				<DbSwNro/>
+				<DbNroTransmissao/>
+				<DbSWEDI_ParceiroLocal>MICHELIN</DbSWEDI_ParceiroLocal>
+				<DbSWEDI_ParceiroExterno>SCANIA</DbSWEDI_ParceiroExterno>
+				<Tb_HeaderEDI_Parceiros>
+					<ParceiroTransmissor Sufixo="T">
+						<DbParceiroIdEDI>50567288000744</DbParceiroIdEDI>
+						<DbParceiroCodigo>SCANIA</DbParceiroCodigo>
+						<DbParceiroNome>MICHELIN</DbParceiroNome>
+						<DbParceiroQualif/>
+						<DbParceiroComCode>900781865</DbParceiroComCode>
+						<DbParceiroRazaoSocial>SOCIEDADE MICHELIN PARTICIPAÇÕES IND. E COM. LTDA</DbParceiroRazaoSocial>
+						<DbParceiroEndereco>ESTRADA DA CACHAMORRA, 5000</DbParceiroEndereco>
+					</ParceiroTransmissor>
+					<ParceiroReceptor Sufixo="R">
+						<DbParceiroIdEDI>59104901000176</DbParceiroIdEDI>
+						<DbParceiroCodigo>116599</DbParceiroCodigo>
+						<DbParceiroNome>SCANIA</DbParceiroNome>
+						<DbParceiroQualif/>
+						<DbParceiroComCode/>
+					</ParceiroReceptor>
+					<ParceiroEmbarcador Sufixo="EbM">
+						<DbParceiroCodigo/>
+						<DbParceiroNome/>
+						<DbParceiroQualif/>
+					</ParceiroEmbarcador>
+					<ParceiroOperadorLogistico Sufixo="OpL">
+						<DbParceiroCodigo/>
+						<DbParceiroNome/>
+						<DbParceiroQualif/>
+					</ParceiroOperadorLogistico>
+					<ParceiroRecebedorMercadoria Sufixo="RbM">
+						<DbParceiroCodigo>116599</DbParceiroCodigo>
+						<DbParceiroNome/>
+						<DbParceiroQualif/>
+					</ParceiroRecebedorMercadoria>
+					<ParceiroDirectShip Sufixo="DSH">
+						<DbParceiroCodigo/>
+						<DbParceiroNome/>
+						<DbParceiroQualif/>
+					</ParceiroDirectShip>
+				</Tb_HeaderEDI_Parceiros>
+			</Tb_HeaderEDI>
+			<ASNoccs>
+				<Tb_ASNCabecalho>
+					<DbOcc>1</DbOcc>
+					<DbEDIversao>99</DbEDIversao>
+					<DbEDIvs>99</DbEDIvs>
+					<DbDtHrMovimento>2026/01/28 09:30:35</DbDtHrMovimento>
+					<DbFilial>1</DbFilial>
+					<DbChaveNFe>33260150567288000744550040010950171164396813</DbChaveNFe>
+					<DbNotaFiscal>1095017</DbNotaFiscal>
+					<DbAtoConcessorioDrawback/>
+					<DbSerie>4</DbSerie>
+					<DbEspecie>02</DbEspecie>
+					<DbInvoice/>
+					<DbDataEmissao>2026/01/28</DbDataEmissao>
+					<DbDataVencimento>2026/03/12</DbDataVencimento>
+					<DbCFOP>6101</DbCFOP>
+					<DbNaturezaOperacao/>
+					<DbSWEDI_ParceiroLocal>MICHELIN</DbSWEDI_ParceiroLocal>
+					<DbSWEDI_ParceiroExterno>SCANIA</DbSWEDI_ParceiroExterno>
+					<DbSWEDI_ClienteCodigo>116599</DbSWEDI_ClienteCodigo>
+					<ValoresTotais>
+						<DbValorDesconto>0.00</DbValorDesconto>
+						<DbValorDespesa>0.00</DbValorDespesa>
+						<DbValorDescontoICMS>0.00</DbValorDescontoICMS>
+						<DbValorFrete>0.00</DbValorFrete>
+						<DbBaseICMS>597777.30</DbBaseICMS>
+						<DbValorICMS>71733.28</DbValorICMS>
+						<DbBaseICMSsubsTrib>0.00</DbBaseICMSsubsTrib>
+						<DbValorICMSsubsTrib>0.00</DbValorICMSsubsTrib>
+						<DbValorIPI>0.00</DbValorIPI>
+						<DbValorPIS>10520.88</DbValorPIS>
+						<DbValorCOFINS>49974.18</DbValorCOFINS>
+						<DbValorSeguro>0.00</DbValorSeguro>
+						<DbValorServicoIndustr>0.00</DbValorServicoIndustr>
+						<DbValorTotal>597777.30</DbValorTotal>
+					</ValoresTotais>
+					<Expedicao>
+						<DbFabricaCliente/>
+						<DbLocalEntrega/>
+						<DbDoca/>
+						<DbLocalCobranca/>
+						<DbLocalFaturamento/>
+						<DbFabricaTransmissor/>
+						<DbDtHrEmbarque>2026/01/28 09:30:32</DbDtHrEmbarque>
+						<DbDtHrChegadaPrevista>2026/01/28 09:30:32</DbDtHrChegadaPrevista>
+						<DbRota/>
+						<DbTipoTransporte/>
+						<DbPlacaVeiculo/>
+						<DbPesoBruto>16173.000</DbPesoBruto>
+						<DbUnidadeMedidaPesoBruto>K</DbUnidadeMedidaPesoBruto>
+						<DbPesoLiquido>16173.000</DbPesoLiquido>
+						<DbUnidadeMedidaPesoLiquido>K</DbUnidadeMedidaPesoLiquido>
+						<DbTotalVolumes>270</DbTotalVolumes>
+						<DbUnidadeMedidaVolumes>U</DbUnidadeMedidaVolumes>
+					</Expedicao>
+					<EspecificoGM>
+						<GMContatoFornecedor/>
+						<GMContatoGM/>
+						<GMDtJanela/>
+						<GMFoneFornecedor/>
+						<GMSenha/>
+					</EspecificoGM>
+					<SubsetITENS DbTotalItens="1">
+						<Tb_ASNItem>
+							<DbItOcc>1</DbItOcc>
+							<DbItProdutoLocal>737482</DbItProdutoLocal>
+							<DbItProdutoLocalVs/>
+							<DbItProdutoCliente>3071284</DbItProdutoCliente>
+							<DbItProdutoClienteVs/>
+							<DbItProdutoClienteDescricao/>
+							<DbItClassificacaoFiscal>0040112090</DbItClassificacaoFiscal>
+							<DbItNumeroPedido>197408</DbItNumeroPedido>
+							<DbItPedidoDSH/>
+							<DbItCFOitem>6101</DbItCFOitem>
+							<DbItTipoFornecimento>?</DbItTipoFornecimento>
+							<DbItUnidadeMedidaNF>PC</DbItUnidadeMedidaNF>
+							<DbItQtdFaturada>270.000</DbItQtdFaturada>
+							<DbItValorUnitario>2213.99000</DbItValorUnitario>
+							<DbItAliquotaIPI>0.00</DbItAliquotaIPI>
+							<DbItValorIPI>0.00</DbItValorIPI>
+							<DbItBaseICMS>597777.30</DbItBaseICMS>
+							<DbItAliquotaICMS>12.00</DbItAliquotaICMS>
+							<DbItValorICMS>71733.28</DbItValorICMS>
+							<DbItValorDescontoICMS>0.00</DbItValorDescontoICMS>
+							<DbItBaseICMSsubsTribut>0.00</DbItBaseICMSsubsTribut>
+							<DbItAliquotaICMSsubsTribut>0.00</DbItAliquotaICMSsubsTribut>
+							<DbItValorICMSsubsTribut>0.00</DbItValorICMSsubsTribut>
+							<DbItValorServicoIndustr>0.00</DbItValorServicoIndustr>
+							<DbItValorPIS>0.00</DbItValorPIS>
+							<DbItValorCOFINS>0.00</DbItValorCOFINS>
+							<DbItAliquotaDoDesconto>0.00</DbItAliquotaDoDesconto>
+							<DbItValorDoDesconto>0.00</DbItValorDoDesconto>
+							<DbItValorTotal>597777.30</DbItValorTotal>
+							<DbItMultiplicador>0.00</DbItMultiplicador>
+							<DbItPesoBruto>0.000</DbItPesoBruto>
+							<DbItPesoLiquido>0.000</DbItPesoLiquido>
+							<DbItCodigoSTE>00</DbItCodigoSTE>
+							<DbItCodigoSTF/>
+							<DbPaisOrigemFabricacao/>
+							<DbItNumeroDoDesenhoDoCliente/>
+							<DbItDataDeAlteracaoDoDesenho/>
+							<DbItUnidadeMedidaEst>PC</DbItUnidadeMedidaEst>
+							<DbItQtdEstoque>270.000</DbItQtdEstoque>
+							<DbItUnidadeMedidaCmp>PC</DbItUnidadeMedidaCmp>
+							<DbItQtdCompras>270.000</DbItQtdCompras>
+							<DbItQuantidadeAcumuladaEntregue>0.000</DbItQuantidadeAcumuladaEntregue>
+							<DbItTotalDefaultUCsPor1UM/>
+							<DbItBlnNumeracaoEhIgualSeUCigualUM>FALSE</DbItBlnNumeracaoEhIgualSeUCigualUM>
+							<DbItHonda_SlipNumber/>
+							<DbItHonda_TipoPedido/>
+							<DbItHonda_Seppen/>
+							<DbItHonda_LoteProducao/>
+							<DbItHonda_CPI/>
+						</Tb_ASNItem>
+					</SubsetITENS>
+				</Tb_ASNCabecalho>
+			</ASNoccs>
+		</ASN_SUBSET>
+	</ASN_SET>
+</ARQUIVOEDI>

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>StimulusoftService</AssemblyName>
+    <RootNamespace>StimulusoftService</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <DocumentationFile>StimulusoftService.xml</DocumentationFile>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Stimulsoft Reports for .NET — licença comercial -->
+    <PackageReference Include="Stimulsoft.Reports.Engine.NetCore" Version="2025.2.1" />
+    <PackageReference Include="Stimulsoft.Reports.Web.NetCore" Version="2025.2.1" />
+
+    <!-- Swagger/OpenAPI -->
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.3.1" />
+
+    <!-- JSON serialization -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+</Project>

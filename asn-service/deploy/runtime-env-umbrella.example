@@ -1,0 +1,34 @@
+# Obrigatorias - autenticacao Umbrella
+UMBRELLA_API_URL=https://hub-api.suaempresa.com
+SATELLITE_CLIENT_ID=preencher
+SATELLITE_SECRET_KEY=preencher
+TEMP_TOKEN_SECRET=preencher_seguro
+
+# Obrigatoria - conexao com banco de dados (AWS MySQL)
+DATABASE_URL=mysql+pymysql://usuario:senha@host:3306/nome_banco
+
+# Obrigatorias - operacao ASN/SwPaaS
+VITE_SWPAAS_USERNAME=preencher
+VITE_SWPAAS_PASSWORD=preencher
+
+# Recomendadas
+REQUIRE_TEMP_TOKEN=true
+TEMP_TOKEN_TTL_SECONDS=300
+DB_AUTO_INIT=false
+MIGRATIONS_ADMIN_TOKEN=defina_um_token_admin_forte
+
+# Opcionais
+TEMP_TOKEN_ALGORITHM=HS256
+UMBRELLA_TIMEOUT_SECONDS=5
+STIMULSOFT_BASE_URL=http://127.0.0.1:5055
+ASN_PORT=8003
+SWPAAS_ENV=hml
+SWPAAS_UPLOAD_OWNER=F6861634-E85D-4BB5-955E-30E5D627999E
+SWPAAS_UPLOAD_ID_CONTEXTO=99F19C2B-4BC8-45FE-B8E1-7CBF08D19988
+SWPAAS_UPLOAD_HASH_INSTANCIA=54a2195e92ab443aa68ece26d0977ec0831ef3c3a9e84403b08b9c9450489c08
+
+# Fallback (usar apenas se TEMP_TOKEN_SECRET nao for definido)
+SATELLITE_JWT_SECRET=opcional
+
+# Runtime Stimulsoft
+ASPNETCORE_URLS=http://127.0.0.1:5055

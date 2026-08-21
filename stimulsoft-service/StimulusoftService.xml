@@ -1,0 +1,179 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>StimulusoftService</name>
+    </assembly>
+    <members>
+        <member name="T:StimulusoftService.Controllers.PrintController">
+            <summary>
+            Endpoints de geração e exportação de relatórios/etiquetas via Stimulsoft.
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.#ctor(StimulusoftService.Services.StimulusoftEngine,Microsoft.Extensions.Logging.ILogger{StimulusoftService.Controllers.PrintController},Microsoft.Extensions.Caching.Memory.IMemoryCache)">
+            <summary>
+            Endpoints de geração e exportação de relatórios/etiquetas via Stimulsoft.
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.GetInfo">
+            <summary>Retorna informações do serviço e status da licença.</summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.ListTemplates">
+            <summary>Lista todos os templates .mrt disponíveis (relatórios e etiquetas).</summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.GetTemplate(System.String,System.Boolean)">
+            <summary>Baixa o arquivo .mrt bruto pelo nome.</summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.RenderPdf(StimulusoftService.Models.RenderPdfRequest)">
+            <summary>
+            Renderiza um relatório por nome de arquivo em disco e retorna o PDF binário.
+            Corpo: { templateName, data, isEtiqueta }
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.RenderPdfContent(StimulusoftService.Models.RenderPdfContentRequest)">
+            <summary>
+            Renderiza PDF a partir do conteúdo bruto do .mrt (sem necessidade de arquivo em disco).
+            Usado pelo GateVirtual quando o template vem do SwPaaS (remoto).
+            Corpo: { mrtContent, data, isEtiqueta }
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.RenderImages(StimulusoftService.Models.RenderImageRequest)">
+            <summary>
+            Renderiza e retorna imagens (JPEG ou PNG) de cada página como Base64 JSON.
+            Corpo: { templateName, data, isEtiqueta, dpi, quality, fromPage, toPage, format }
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.RenderImagesContent(StimulusoftService.Models.RenderImageContentRequest)">
+            <summary>
+            Renderiza imagens JPEG/PNG a partir do conteúdo bruto do .mrt.
+            Usado pelo GateVirtual para gerar thumbnails sem arquivo em disco.
+            Corpo: { mrtContent, data, isEtiqueta, dpi, quality, fromPage, toPage, format }
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.RenderPreview(StimulusoftService.Models.RenderPreviewRequest)">
+            <summary>
+            Retorna pacote de preview para navegação: miniaturas de todas as páginas + página principal selecionada.
+            Corpo: { templateName, data, isEtiqueta, selectedPage, mainDpi, thumbDpi, format }
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.RenderPreviewContent(StimulusoftService.Models.RenderPreviewContentRequest)">
+            <summary>
+            Retorna pacote de preview a partir de conteúdo raw do .mrt.
+            Corpo: { mrtContent, data, isEtiqueta, selectedPage, mainDpi, thumbDpi, format }
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.PreviewMetadata(StimulusoftService.Models.PreviewMetadataRequest)">
+            <summary>
+            Retorna apenas metadados de preview (total de páginas), para inicialização rápida do viewer.
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.PreviewPage(StimulusoftService.Models.PreviewPageRequest)">
+            <summary>
+            Retorna somente a página selecionada como imagem binária (sem Base64).
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.RenderSingleImage(StimulusoftService.Models.RenderImageRequest)">
+            <summary>
+            Retorna a imagem de UMA página específica diretamente como Content-Type image/jpeg.
+            Útil para preview rápido sem JSON overhead.
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.RenderHtml(StimulusoftService.Models.RenderHtmlRequest)">
+            <summary>Exporta o relatório como HTML5 embutido.</summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.CountPages(StimulusoftService.Models.CountPagesRequest)">
+            <summary>Conta quantas páginas o relatório gerado possui (por nome de arquivo).</summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.CountPagesContent(StimulusoftService.Models.CountPagesContentRequest)">
+            <summary>
+            Conta quantas páginas o relatório possui a partir do conteúdo bruto do .mrt.
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.InitViewerContent(StimulusoftService.Models.ViewerInitContentRequest)">
+            <summary>
+            Inicializa sessão de viewer server-driven para PDF nativo + thumbnails.
+            Retorna URLs de navegação para o frontend ficar quase só na camada de interface.
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Controllers.PrintController.ViewerComponent(System.String,System.Int32,System.String)">
+            <summary>
+            Componente HTML server-driven para visualizacao de PDF com thumbnails.
+            Navegacao por thumbnail altera apenas o fragmento #page no iframe do PDF.
+            </summary>
+        </member>
+        <member name="T:StimulusoftService.Models.RenderPdfContentRequest">
+            <summary>
+            Renderiza PDF a partir do conteúdo bruto do .mrt (não precisa do arquivo em disco).
+            Usado pelo GateVirtual quando o template vem do SwPaaS.
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Models.RenderPdfContentRequest.#ctor(System.String,System.String,System.Boolean)">
+            <summary>
+            Renderiza PDF a partir do conteúdo bruto do .mrt (não precisa do arquivo em disco).
+            Usado pelo GateVirtual quando o template vem do SwPaaS.
+            </summary>
+        </member>
+        <member name="T:StimulusoftService.Models.RenderImageContentRequest">
+            <summary>
+            Renderiza imagens JPEG/PNG a partir do conteúdo bruto do .mrt.
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Models.RenderImageContentRequest.#ctor(System.String,System.String,System.Boolean,System.Single,System.Single,System.Nullable{System.Int32},System.Nullable{System.Int32},System.String)">
+            <summary>
+            Renderiza imagens JPEG/PNG a partir do conteúdo bruto do .mrt.
+            </summary>
+        </member>
+        <member name="T:StimulusoftService.Models.RenderPreviewRequest">
+            <summary>
+            Gera pacote de preview com miniaturas de todas as páginas e página principal selecionada.
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Models.RenderPreviewRequest.#ctor(System.String,System.String,System.Boolean,System.Int32,System.Single,System.Single,System.Single,System.String)">
+            <summary>
+            Gera pacote de preview com miniaturas de todas as páginas e página principal selecionada.
+            </summary>
+        </member>
+        <member name="T:StimulusoftService.Models.RenderPreviewContentRequest">
+            <summary>
+            Versão do preview para templates recebidos por conteúdo bruto do .mrt.
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Models.RenderPreviewContentRequest.#ctor(System.String,System.String,System.Boolean,System.Int32,System.Single,System.Single,System.Single,System.String)">
+            <summary>
+            Versão do preview para templates recebidos por conteúdo bruto do .mrt.
+            </summary>
+        </member>
+        <member name="T:StimulusoftService.Models.CountPagesContentRequest">
+            <summary>
+            Conta páginas a partir do conteúdo bruto do .mrt.
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Models.CountPagesContentRequest.#ctor(System.String,System.String,System.Boolean)">
+            <summary>
+            Conta páginas a partir do conteúdo bruto do .mrt.
+            </summary>
+        </member>
+        <member name="T:StimulusoftService.Services.StimulusoftEngine">
+            <summary>
+            Motor central Stimulsoft: carrega licença, resolve templates MRT e exporta relatórios/etiquetas.
+            </summary>
+        </member>
+        <member name="M:StimulusoftService.Services.StimulusoftEngine.ExpandArrayToTables(System.Data.DataSet,System.String,Newtonsoft.Json.Linq.JArray)">
+            <summary>
+            Expande recursivamente um JArray em DataTable(s) no DataSet.
+            Arrays aninhados viram tabelas filho (tableName_propName) com coluna relationId.
+            Replica o comportamento do StiJsonDatabase nativo do Stimulsoft.
+            </summary>
+        </member>
+        <member name="T:StimulusoftService.Services.TemplatesOptions">
+            <summary>
+            Opções de configuração lidas de appsettings.json → seção "Templates".
+            </summary>
+        </member>
+        <member name="P:StimulusoftService.Services.TemplatesOptions.MrtRootPath">
+            <summary>Caminho raiz onde estão os arquivos .mrt</summary>
+        </member>
+        <member name="P:StimulusoftService.Services.TemplatesOptions.LicenseKeyPath">
+            <summary>Caminho do arquivo license.key do Stimulsoft</summary>
+        </member>
+    </members>
+</doc>

@@ -1,0 +1,6 @@
+@StimulusoftService_HostAddress = http://localhost:5252
+
+GET {{StimulusoftService_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
