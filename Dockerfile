@@ -7,7 +7,7 @@ ARG DOTNET_ASPNET_IMAGE=mcr.microsoft.com/dotnet/aspnet:8.0-bookworm-slim
 FROM ${NODE_BUILD_IMAGE} AS frontend-build
 WORKDIR /src/asn-service/frontend
 COPY asn-service/frontend/package*.json ./
-RUN npm ci --no-audit --no-fund
+RUN if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund --legacy-peer-deps; fi
 COPY asn-service/frontend ./
 ARG VITE_ASN_API_URL=
 ARG VITE_STIMULSOFT_SERVICE_URL=/api/stimulsoft
