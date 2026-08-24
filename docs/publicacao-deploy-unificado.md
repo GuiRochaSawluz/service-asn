@@ -8,10 +8,10 @@ Este pacote sobe os dois servicos no mesmo container, com Nginx na porta 80:
 
 ## Build da imagem
 
-Use o contexto na pasta pai (`d:/tools`) para incluir os dois projetos:
+Use a raiz deste repositório como contexto para incluir os dois projetos:
 
 ```powershell
-docker build -f asn-service/deploy/Dockerfile.unified -t asn-unified:latest d:/tools
+docker build -f Dockerfile -t asn-unified:latest .
 ```
 
 ### Base images via Amazon ECR
@@ -25,7 +25,7 @@ O Dockerfile ja usa ECR Public por padrao para imagens base:
 Se quiser usar imagens espelhadas no seu ECR privado, passe build args:
 
 ```powershell
-docker build -f asn-service/deploy/Dockerfile.unified -t asn-unified:latest d:/tools `
+docker build -f Dockerfile -t asn-unified:latest . `
   --build-arg NODE_BUILD_IMAGE=<aws_account_id>.dkr.ecr.<region>.amazonaws.com/base/node:20-alpine `
   --build-arg DOTNET_SDK_IMAGE=<aws_account_id>.dkr.ecr.<region>.amazonaws.com/base/dotnet-sdk:8.0 `
   --build-arg DOTNET_ASPNET_IMAGE=<aws_account_id>.dkr.ecr.<region>.amazonaws.com/base/dotnet-aspnet:8.0-bookworm-slim

@@ -2,6 +2,9 @@
 /*
 !/asn-service/
 !/stimulsoft-service/
+!/Dockerfile
+!/docs/
+!/docs/**
 !/.gitignore
 !/.dockerignore
 !/.gitattributes

@@ -123,12 +123,12 @@ O frontend agora pode consumir o Stimulsoft pelo mesmo backend ASN via proxy:
 
 ## Deploy unificado em container único (porta 80)
 
-Arquivos prontos em `deploy/`:
+Arquivos prontos para deploy unificado:
 
-- `Dockerfile.unified`
-- `nginx.unified.conf`
-- `supervisord.conf`
-- `README-unified-deploy.md`
+- `../Dockerfile` (na raiz do repositório)
+- `deploy/nginx.unified.conf`
+- `deploy/supervisord.conf`
+- `../docs/publicacao-deploy-unificado.md`
 
 Esse pacote sobe:
 
@@ -139,9 +139,9 @@ Esse pacote sobe:
 ## Documentação para satélites
 
 - Guia de integração (endpoints, fluxo iframe, token temporário):
-    - `docs/integracao-satelites-umbrella-runtime.md`
+    - `../docs/publicacao-integracao-satelites-umbrella-runtime.md`
 - Lista de variáveis de runtime para Umbrella/AWS:
-    - `deploy/runtime-env-umbrella.example`
+    - `../docs/publicacao-runtime-env-umbrella.example`
 
 ## Administração de migrações (Alembic)
 
