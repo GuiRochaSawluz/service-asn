@@ -29,12 +29,14 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         python3 \
         python3-pip \
+        python3-venv \
         nginx \
         supervisor \
     && rm -rf /var/lib/apt/lists/*
 
 COPY asn-service/backend /app/asn-backend
-RUN pip3 install --no-cache-dir -r /app/asn-backend/requirements.txt
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir -r /app/asn-backend/requirements.txt
 
 COPY --from=stimulsoft-build /out /app/stimulsoft
 COPY --from=frontend-build /src/asn-service/frontend/dist /usr/share/nginx/html
