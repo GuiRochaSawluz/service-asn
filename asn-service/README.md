@@ -52,6 +52,39 @@ VITE_SWPAAS_USERNAME=   # credencial SwPaaS
 VITE_SWPAAS_PASSWORD=   # credencial SwPaaS
 ```
 
+### Fallback SQLite + sincronização automática
+
+Quando `DATABASE_URL` aponta para MySQL, o backend pode entrar em modo fallback local
+se houver falha de conexão ou timeout.
+
+Variáveis relevantes:
+
+```env
+DB_ENABLE_SQLITE_FALLBACK=true
+DB_AUTO_INIT=true
+DB_CONNECT_TIMEOUT_SECONDS=3
+DB_READ_TIMEOUT_SECONDS=5
+DB_WRITE_TIMEOUT_SECONDS=5
+DB_RECOVERY_CHECK_SECONDS=10
+DB_SYNC_BATCH_SIZE=200
+DB_SYNC_LOCK_NAME=asn_fallback_sync_lock
+CONTAINER_INSTANCE_ID=asn-pod-01
+FALLBACK_DB_PATH=backend/asn_fallback.db
+```
+
+Comportamento:
+
+- Em falha no MySQL, o serviço usa SQLite local com o schema necessário.
+- Escritas em fallback entram em uma fila local (`sync_outbox`).
+- Quando o MySQL volta, ocorre replay automático dos eventos para o banco primário.
+- Em ambiente com vários containers (NodeBalancer), o replay usa lock distribuído no MySQL
+    e deduplicação por evento no banco primário.
+
+Observação importante para multi-container:
+
+- `POST /api/labels/sequence/generate` retorna `503` durante fallback.
+- Isso evita colisão de sequenciais entre containers isolados enquanto o banco primário está fora.
+
 ## Endpoints principais
 
 | Método | Endpoint | Descrição |

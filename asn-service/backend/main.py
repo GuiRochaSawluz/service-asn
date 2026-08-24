@@ -50,7 +50,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 import swpaas_client as swpaas
 from asn_generator import gerar_xml_asn, parse_itens_json, validate_xml_asn
-from db import db, is_mysql
+from db import db, db_runtime_status, is_mysql
 from models import (
     AvisoEmbarqueCreate,
     AvisoEmbarqueUpdate,
@@ -329,13 +329,15 @@ def _run_alembic(*args: str) -> dict:
 @app.get("/health", tags=["System"])
 def health():
     try:
-        db().execute("SELECT 1")
+        conn = db()
+        conn.execute("SELECT 1")
         return {
             "status": "ok",
             "service": "asn-service",
             "port": 8003,
             "swpaas_env": os.getenv("SWPAAS_ENV", "hml"),
             "database_url": os.getenv("DATABASE_URL", "sqlite:///backend/asn.db"),
+            "database_runtime": conn.runtime_status(),
         }
     except Exception as exc:
         return {"status": "error", "detail": str(exc)}
@@ -507,10 +509,16 @@ async def unified_health(_claims: dict = Depends(_require_sawluz_operator)):
     stimulsoft_base = _get_stimulsoft_base_url()
 
     asn_status = "ok"
+    asn_db = {}
     try:
-        db().execute("SELECT 1")
+        conn = db()
+        conn.execute("SELECT 1")
+        asn_db = conn.runtime_status()
+        if asn_db.get("mode") == "fallback":
+            asn_status = "degraded"
     except Exception:
         asn_status = "error"
+        asn_db = {"mode": "error"}
 
     stimulsoft_status = "error"
     stimulsoft_detail = None
@@ -530,7 +538,7 @@ async def unified_health(_claims: dict = Depends(_require_sawluz_operator)):
     return {
         "status": overall,
         "services": {
-            "asn": {"status": asn_status, "port": 8003},
+            "asn": {"status": asn_status, "port": 8003, "database": asn_db},
             "stimulsoft": {"status": stimulsoft_status, "base_url": stimulsoft_base, "detail": stimulsoft_detail},
         },
         "timestamp": _now_iso(),
@@ -550,6 +558,7 @@ def unified_stats(_claims: dict = Depends(_require_sawluz_operator)):
         "database": {
             "avisos_embarque": avisos,
             "nfe_labels": labels,
+            "runtime": db_runtime_status(),
         },
         "requests": {
             "asn_api": REQUEST_COUNTER["asn_api"],
@@ -632,6 +641,14 @@ def create_aviso(payload: AvisoEmbarqueCreate):
                 now, now,
             ),
         )
+
+        saved = conn.execute(
+            "SELECT * FROM avisos_embarque WHERE id = ?",
+            (cur.lastrowid,),
+        ).fetchone()
+        if saved:
+            conn.enqueue_sync_event("aviso_embarque", payload.id_meta, dict(saved))
+
         conn.commit()
         return {"id": cur.lastrowid}
     except Exception as exc:
@@ -691,6 +708,14 @@ def update_aviso(aviso_id: int, payload: AvisoEmbarqueUpdate):
         f"UPDATE avisos_embarque SET {', '.join(updates)} WHERE id = ?",
         values,
     )
+
+    saved = conn.execute(
+        "SELECT * FROM avisos_embarque WHERE id = ?",
+        (aviso_id,),
+    ).fetchone()
+    if saved:
+        conn.enqueue_sync_event("aviso_embarque", saved["id_meta"], dict(saved))
+
     conn.commit()
     return {"ok": True}
 
@@ -772,6 +797,14 @@ async def gerar_aviso(aviso_id: int, payload: GerarRequest):
         "UPDATE avisos_embarque SET xml_asn_gerado = ?, rnd004_path = ?, rnd004_length = ?, updated_at = ? WHERE id = ?",
         (xml_content, filename, len(xml_bytes), _now_iso(), aviso_id),
     )
+
+    saved = conn.execute(
+        "SELECT * FROM avisos_embarque WHERE id = ?",
+        (aviso_id,),
+    ).fetchone()
+    if saved:
+        conn.enqueue_sync_event("aviso_embarque", saved["id_meta"], dict(saved))
+
     conn.commit()
 
     # Upload automático para API legado SWPaaS
@@ -1034,30 +1067,44 @@ def save_nfe_labels(chave_acesso: str, req: SaveEtiquetasRequest):
     import json as _json
     conn = db()
     etiquetas_json = _json.dumps(req.etiquetas, ensure_ascii=False)
+    updated_at = _now_iso()
     if is_mysql():
         conn.execute(
             """
-            INSERT INTO nfe_label_data (chave_acesso, etiquetas_json, updated_by)
-            VALUES (?, ?, ?)
+            INSERT INTO nfe_label_data (chave_acesso, etiquetas_json, updated_at, updated_by)
+            VALUES (?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 etiquetas_json = VALUES(etiquetas_json),
-                updated_at = CURRENT_TIMESTAMP,
+                updated_at = VALUES(updated_at),
                 updated_by = VALUES(updated_by)
             """,
-            (chave_acesso, etiquetas_json, req.updated_by),
+            (chave_acesso, etiquetas_json, updated_at, req.updated_by),
         )
     else:
         conn.execute(
             """
             INSERT INTO nfe_label_data (chave_acesso, etiquetas_json, updated_at, updated_by)
-            VALUES (?, ?, datetime('now'), ?)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(chave_acesso) DO UPDATE SET
                 etiquetas_json = excluded.etiquetas_json,
-                updated_at     = datetime('now'),
+                updated_at     = excluded.updated_at,
                 updated_by     = excluded.updated_by
             """,
-            (chave_acesso, etiquetas_json, req.updated_by),
+            (chave_acesso, etiquetas_json, updated_at, req.updated_by),
         )
+
+    if conn.is_fallback_mode():
+        conn.enqueue_sync_event(
+            "nfe_label_data",
+            chave_acesso,
+            {
+                "chave_acesso": chave_acesso,
+                "etiquetas_json": etiquetas_json,
+                "updated_at": updated_at,
+                "updated_by": req.updated_by,
+            },
+        )
+
     conn.commit()
     return {"status": "ok"}
 
@@ -1083,6 +1130,16 @@ def generate_label_sequence(req: SequenceRequest):
         raise HTTPException(status_code=400, detail="count deve estar entre 1 e 500")
 
     conn = db()
+    if conn.is_fallback_mode():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Geração de sequência indisponível em fallback SQLite. "
+                "Em ambiente com múltiplos containers, aguarde o retorno do banco primário "
+                "para evitar colisão de sequenciais."
+            ),
+        )
+
     if is_mysql():
         try:
             conn.execute("START TRANSACTION")
