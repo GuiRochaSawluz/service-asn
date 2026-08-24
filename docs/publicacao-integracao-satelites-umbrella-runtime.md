@@ -214,8 +214,8 @@ Variavel de runtime do Stimulsoft no container unificado:
 7. Validar acesso em /api/auth/session/validate.
 8. Validar /api/me e confirmar e-mail @sawluz.com.br para /ops e /admin/migrations.
 
-## Imagens base em ECR
-- O Dockerfile usa ECR Public por padrao para Node e .NET.
+## Imagens base do Dockerfile
+- O Dockerfile usa ECR Public para Node e MCR para .NET por padrao.
 - Se sua empresa exigir ECR privado, sobrescreva as imagens base com build args:
   - NODE_BUILD_IMAGE
   - DOTNET_SDK_IMAGE

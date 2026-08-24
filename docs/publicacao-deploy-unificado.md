@@ -14,13 +14,13 @@ Use a raiz deste repositório como contexto para incluir os dois projetos:
 docker build -f Dockerfile -t asn-unified:latest .
 ```
 
-### Base images via Amazon ECR
+### Base images padrao
 
-O Dockerfile ja usa ECR Public por padrao para imagens base:
+O Dockerfile usa as seguintes imagens base por padrao:
 
 - public.ecr.aws/docker/library/node:20-alpine
-- public.ecr.aws/dotnet/sdk:8.0
-- public.ecr.aws/dotnet/aspnet:8.0-bookworm-slim
+- mcr.microsoft.com/dotnet/sdk:8.0
+- mcr.microsoft.com/dotnet/aspnet:8.0-bookworm-slim
 
 Se quiser usar imagens espelhadas no seu ECR privado, passe build args:
 

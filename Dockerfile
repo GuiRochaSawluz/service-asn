@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1.7
 
 ARG NODE_BUILD_IMAGE=public.ecr.aws/docker/library/node:20-alpine
-ARG DOTNET_SDK_IMAGE=public.ecr.aws/dotnet/sdk:8.0
-ARG DOTNET_ASPNET_IMAGE=public.ecr.aws/dotnet/aspnet:8.0-bookworm-slim
+ARG DOTNET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:8.0
+ARG DOTNET_ASPNET_IMAGE=mcr.microsoft.com/dotnet/aspnet:8.0-bookworm-slim
 
 FROM ${NODE_BUILD_IMAGE} AS frontend-build
 WORKDIR /src/asn-service/frontend
