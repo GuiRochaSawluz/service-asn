@@ -18,7 +18,7 @@ docker build -f Dockerfile -t asn-unified:latest .
 
 O Dockerfile usa as seguintes imagens base por padrao:
 
-- public.ecr.aws/docker/library/node:20-alpine
+- public.ecr.aws/docker/library/node:22-alpine
 - mcr.microsoft.com/dotnet/sdk:8.0
 - mcr.microsoft.com/dotnet/aspnet:8.0-bookworm-slim
 
@@ -26,7 +26,7 @@ Se quiser usar imagens espelhadas no seu ECR privado, passe build args:
 
 ```powershell
 docker build -f Dockerfile -t asn-unified:latest . `
-  --build-arg NODE_BUILD_IMAGE=<aws_account_id>.dkr.ecr.<region>.amazonaws.com/base/node:20-alpine `
+  --build-arg NODE_BUILD_IMAGE=<aws_account_id>.dkr.ecr.<region>.amazonaws.com/base/node:22-alpine `
   --build-arg DOTNET_SDK_IMAGE=<aws_account_id>.dkr.ecr.<region>.amazonaws.com/base/dotnet-sdk:8.0 `
   --build-arg DOTNET_ASPNET_IMAGE=<aws_account_id>.dkr.ecr.<region>.amazonaws.com/base/dotnet-aspnet:8.0-bookworm-slim
 ```

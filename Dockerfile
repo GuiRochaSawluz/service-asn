@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1.7
 
-ARG NODE_BUILD_IMAGE=public.ecr.aws/docker/library/node:20-alpine
+ARG NODE_BUILD_IMAGE=public.ecr.aws/docker/library/node:22-alpine
 ARG DOTNET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:8.0
 ARG DOTNET_ASPNET_IMAGE=mcr.microsoft.com/dotnet/aspnet:8.0-bookworm-slim
 
 FROM ${NODE_BUILD_IMAGE} AS frontend-build
 WORKDIR /src/asn-service/frontend
 COPY asn-service/frontend/package*.json ./
-RUN if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund --legacy-peer-deps; fi
+RUN if [ -f package-lock.json ]; then npm ci --no-audit --no-fund --legacy-peer-deps || npm install --no-audit --no-fund --legacy-peer-deps; else npm install --no-audit --no-fund --legacy-peer-deps; fi
 COPY asn-service/frontend ./
 ARG VITE_ASN_API_URL=
 ARG VITE_STIMULSOFT_SERVICE_URL=/api/stimulsoft
