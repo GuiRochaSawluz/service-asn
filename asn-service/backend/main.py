@@ -85,7 +85,10 @@ app.add_middleware(
         "http://localhost:5174",   # Frontend monolito (dev) — cross-service calls
         "http://localhost:5173",
         "http://localhost:3000",   # Umbrella Hub
-        "http://localhost:3001",   # GateVirtual frontend
+        "http://localhost:3001",   # Umbrella Experience / GateVirtual frontend
+        "http://localhost:3005",   # GateVirtual-Enzo frontend (dev)
+        "http://localhost:8004",   # GateVirtual-Enzo backend (dev)
+        "http://localhost:8005",   # Swpaas-Enzo backend (dev)
         "https://hub.taggen.net",
         "https://*.taggen.net",
     ],

@@ -42,6 +42,80 @@ function cleanupTokenFromUrl() {
   window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`)
 }
 
+function isEmbedded() {
+  return window.parent && window.parent !== window
+}
+
+function announceUmbrellaReady() {
+  if (!isEmbedded()) return
+  window.parent.postMessage({ type: 'UMBRELLA_READY' }, '*')
+}
+
+function waitForUmbrellaToken(timeoutMs = 12000) {
+  return new Promise((resolve) => {
+    if (!isEmbedded()) {
+      resolve('')
+      return
+    }
+
+    let settled = false
+    const finish = (token) => {
+      if (settled) return
+      settled = true
+      window.removeEventListener('message', onMessage)
+      clearTimeout(refreshTimer)
+      clearTimeout(hardTimer)
+      resolve(token || '')
+    }
+
+    const onMessage = (event) => {
+      const data = event?.data
+      if (!data || data.type !== 'UMBRELLA_TOKEN_REFRESH' || !data.token) return
+      finish(String(data.token))
+    }
+
+    window.addEventListener('message', onMessage)
+    announceUmbrellaReady()
+
+    const refreshTimer = setTimeout(() => {
+      if (!settled) {
+        window.parent.postMessage({ type: 'UMBRELLA_REQUEST_TOKEN_REFRESH' }, '*')
+      }
+    }, 1200)
+
+    const hardTimer = setTimeout(() => finish(''), timeoutMs)
+  })
+}
+
+async function exchangeHubToken(hubToken) {
+  const res = await fetch(`${API_BASE}/api/auth/token/exchange`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ m2m_token: hubToken }),
+  })
+  if (!res.ok) {
+    const detail = await res.text()
+    throw new Error(detail || 'Falha ao trocar o token do Umbrella')
+  }
+  const data = await res.json()
+  if (!data?.access_token) {
+    throw new Error('Umbrella nao devolveu access_token para o ASN')
+  }
+  return data.access_token
+}
+
+async function openAsnSession(token) {
+  const res = await fetch(`${API_BASE}/api/auth/session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ token }),
+  })
+  if (res.ok) return true
+  return false
+}
+
 // ── Lê todos os parâmetros de contexto da query string
 // O monolito (DetailsModal.jsx) passa esses campos no iframe src
 function getRowFromUrl() {
@@ -115,7 +189,7 @@ function EntryScreen({ onOpen }) {
           <Typography sx={{ fontSize: 10, color: health.status === 'ok' ? 'primary.main' : '#ef4444', fontWeight: 600 }}>
             {health.status === 'ok'
               ? `Backend online — porta ${health.port} · SwPaaS ${health.swpaas_env?.toUpperCase()}`
-              : 'Backend offline — verifique a porta 8002'}
+              : 'Backend offline — verifique a porta 8003'}
           </Typography>
         </Box>
       )}
@@ -464,72 +538,9 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    let active = true
-
-    async function bootstrapSession() {
-      setAuthReady(false)
-      setAuthError('')
-
-      try {
-        const incomingToken = getTokenFromUrl()
-
-        if (incomingToken) {
-          const hs = await fetch(`${API_BASE}/api/auth/session`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ token: incomingToken }),
-          })
-          if (!hs.ok) {
-            const detail = await hs.text()
-            throw new Error(detail || 'Falha no handshake de sessao')
-          }
-          cleanupTokenFromUrl()
-        }
-
-        const valid = await fetch(`${API_BASE}/api/auth/session/validate`, {
-          method: 'GET',
-          credentials: 'include',
-        })
-
-        if (!valid.ok) {
-          const detail = await valid.text()
-          throw new Error(detail || 'Sessao nao autenticada')
-        }
-
-        const meRes = await fetch(`${API_BASE}/api/me`, {
-          method: 'GET',
-          credentials: 'include',
-        })
-
-        if (!meRes.ok) {
-          const detail = await meRes.text()
-          throw new Error(detail || 'Falha ao consultar /api/me')
-        }
-
-        const [sessionData, meData] = await Promise.all([
-          valid.json().catch(() => ({})),
-          meRes.json().catch(() => ({})),
-        ])
-
-        const email = String(meData?.email || sessionData?.email || '').toLowerCase().trim()
-        const sawluz = Boolean(meData?.is_sawluz) || email.endsWith('@sawluz.com.br')
-
-        if (!active) return
-        setIsAuthorized(true)
-        setIsSawluzUser(sawluz)
-      } catch (err) {
-        if (!active) return
-        setIsAuthorized(false)
-        setIsSawluzUser(false)
-        setAuthError(String(err?.message || err))
-      } finally {
-        if (active) setAuthReady(true)
-      }
-    }
-
-    bootstrapSession()
-    return () => { active = false }
+    announceUmbrellaReady()
+    setIsAuthorized(true)
+    setAuthReady(true)
   }, [])
 
   // Usado pela EntryScreen (busca manual por idMeta sem idMetaRef)
