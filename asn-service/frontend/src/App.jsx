@@ -23,6 +23,7 @@ import { I18nProvider } from './I18nContext'
 import { EmulationProvider } from './EmulationContext'
 import { getTheme, applyUIPreferencesToDOM } from './theme'
 import { useUmbrellaColors } from './useUmbrellaColors'
+import { getAppPathname } from './satellitePath'
 
 const AvisoEmbarqueTab = lazy(() => import('./AvisoEmbarqueTab'))
 
@@ -560,8 +561,9 @@ export default function App() {
     setCurrentRow(getRowFromUrl())
   }
 
-  const isOpsRoute = window.location.pathname.startsWith('/ops')
-  const isAdminMigrationsRoute = window.location.pathname.startsWith('/admin/migrations')
+  const appPath = getAppPathname()
+  const isOpsRoute = appPath === '/ops' || appPath.startsWith('/ops/')
+  const isAdminMigrationsRoute = appPath === '/admin/migrations' || appPath.startsWith('/admin/migrations/')
   const needsSawluzAccess = isOpsRoute || isAdminMigrationsRoute
 
   if (!authReady) {
