@@ -441,6 +441,8 @@ def create_front_session(payload: SessionTokenRequest, request: Request, respons
     max_age = max(1, int(claims.get("exp", int(datetime.now(timezone.utc).timestamp()) + 60) - int(datetime.now(timezone.utc).timestamp())))
     origin = request.headers.get("origin", "")
     is_local = _is_local_origin(origin)
+    prefix = (request.headers.get("x-forwarded-prefix") or "").strip().rstrip("/")
+    cookie_path = f"{prefix}/" if prefix.startswith("/") else "/"
 
     response.set_cookie(
         key="sat_tmp_auth",
@@ -449,7 +451,7 @@ def create_front_session(payload: SessionTokenRequest, request: Request, respons
         secure=not is_local,
         samesite="none" if not is_local else "lax",
         max_age=max_age,
-        path="/",
+        path=cookie_path,
     )
 
     return {

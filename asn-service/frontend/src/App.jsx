@@ -539,9 +539,52 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    announceUmbrellaReady()
-    setIsAuthorized(true)
-    setAuthReady(true)
+    let cancelled = false
+
+    async function boot() {
+      try {
+        announceUmbrellaReady()
+        let token = getTokenFromUrl()
+        if (!token && isEmbedded()) {
+          token = await waitForUmbrellaToken()
+        }
+
+        if (token) {
+          const opened = await openAsnSession(token)
+          if (!opened) {
+            const access = await exchangeHubToken(token)
+            const exchanged = await openAsnSession(access)
+            if (!exchanged) throw new Error('Falha ao abrir a sessão do ASN')
+          }
+          cleanupTokenFromUrl()
+        } else if (isEmbedded()) {
+          throw new Error('O Hub não enviou o token da sessão')
+        }
+
+        if (token || isEmbedded()) {
+          const res = await fetch(`${API_BASE}/api/auth/session/validate`, { credentials: 'include' })
+          if (res.ok) {
+            const session = await res.json()
+            if (!cancelled) setIsSawluzUser(!!session?.is_sawluz)
+          } else if (isEmbedded()) {
+            throw new Error('Sessão do ASN não foi validada')
+          }
+        }
+
+        if (!cancelled) {
+          setIsAuthorized(true)
+          setAuthReady(true)
+        }
+      } catch (err) {
+        if (cancelled) return
+        setAuthError(err?.message || 'Falha na sessão do Umbrella')
+        setIsAuthorized(false)
+        setAuthReady(true)
+      }
+    }
+
+    boot()
+    return () => { cancelled = true }
   }, [])
 
   // Usado pela EntryScreen (busca manual por idMeta sem idMetaRef)
