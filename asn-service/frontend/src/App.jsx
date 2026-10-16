@@ -113,8 +113,9 @@ async function openAsnSession(token) {
     credentials: 'include',
     body: JSON.stringify({ token }),
   })
-  if (res.ok) return true
-  return false
+  if (res.ok) return { ok: true, detail: '' }
+  const detail = await res.text()
+  return { ok: false, detail: detail || `HTTP ${res.status}` }
 }
 
 // ── Lê todos os parâmetros de contexto da query string
@@ -542,43 +543,40 @@ export default function App() {
     let cancelled = false
 
     async function boot() {
+      announceUmbrellaReady()
       try {
-        announceUmbrellaReady()
         let token = getTokenFromUrl()
         if (!token && isEmbedded()) {
           token = await waitForUmbrellaToken()
         }
 
+        let sessionOpened = false
         if (token) {
-          const opened = await openAsnSession(token)
-          if (!opened) {
+          let opened = await openAsnSession(token)
+          if (!opened.ok) {
             const access = await exchangeHubToken(token)
-            const exchanged = await openAsnSession(access)
-            if (!exchanged) throw new Error('Falha ao abrir a sessão do ASN')
+            opened = await openAsnSession(access)
+          }
+          sessionOpened = opened.ok
+          if (!opened.ok) {
+            console.warn('Sessão ASN não aberta.', opened.detail)
           }
           cleanupTokenFromUrl()
-        } else if (isEmbedded()) {
-          throw new Error('O Hub não enviou o token da sessão')
         }
 
-        if (token || isEmbedded()) {
+        if (sessionOpened) {
           const res = await fetch(`${API_BASE}/api/auth/session/validate`, { credentials: 'include' })
           if (res.ok) {
             const session = await res.json()
             if (!cancelled) setIsSawluzUser(!!session?.is_sawluz)
-          } else if (isEmbedded()) {
-            throw new Error('Sessão do ASN não foi validada')
           }
         }
-
-        if (!cancelled) {
-          setIsAuthorized(true)
-          setAuthReady(true)
-        }
       } catch (err) {
-        if (cancelled) return
-        setAuthError(err?.message || 'Falha na sessão do Umbrella')
-        setIsAuthorized(false)
+        console.warn('Handshake do Umbrella ignorado.', err?.message || err)
+      }
+
+      if (!cancelled) {
+        setIsAuthorized(true)
         setAuthReady(true)
       }
     }
