@@ -71,6 +71,11 @@ function waitForUmbrellaToken(timeoutMs = 12000) {
     const onMessage = (event) => {
       const data = event?.data
       if (!data || data.type !== 'UMBRELLA_TOKEN_REFRESH' || !data.token) return
+      try {
+        window.parent?.postMessage({ type: 'UMBRELLA_TOKEN_ACK', version: 1 }, event.origin || '*')
+      } catch {
+        /* o pai segue sem o ACK */
+      }
       finish(String(data.token))
     }
 
