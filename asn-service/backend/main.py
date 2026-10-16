@@ -260,6 +260,24 @@ def _extract_and_validate_temp_token_from_request(request: Request) -> dict:
     return _jwt_decode_hs256(token, secret, algorithm)
 
 
+def _compact_principal(principal: dict) -> dict:
+    """Mantém só identidade. O /me do Hub inteiro estoura o limite do cookie."""
+    if not isinstance(principal, dict):
+        return {}
+    user = principal.get("user") if isinstance(principal.get("user"), dict) else {}
+    compact = {
+        "email": principal.get("email") or principal.get("mail") or user.get("email") or user.get("mail") or "",
+        "name": principal.get("name") or user.get("name") or "",
+        "sub": principal.get("sub") or user.get("sub") or "",
+    }
+    if user.get("email") or user.get("mail"):
+        compact["user"] = {
+            "email": user.get("email") or user.get("mail") or "",
+            "name": user.get("name") or "",
+        }
+    return {key: value for key, value in compact.items() if value}
+
+
 def _extract_email_from_claims(claims: dict) -> str:
     principal = claims.get("principal") or {}
     if isinstance(principal, dict):
@@ -393,7 +411,7 @@ async def exchange_m2m_token(payload: M2MExchangeRequest, authorization: str = H
         {
             "scope": payload.scope,
             "client_id": os.getenv("SATELLITE_CLIENT_ID", ""),
-            "principal": principal,
+            "principal": _compact_principal(principal),
         },
         ttl,
     )
@@ -441,6 +459,8 @@ def create_front_session(payload: SessionTokenRequest, request: Request, respons
     max_age = max(1, int(claims.get("exp", int(datetime.now(timezone.utc).timestamp()) + 60) - int(datetime.now(timezone.utc).timestamp())))
     origin = request.headers.get("origin", "")
     is_local = _is_local_origin(origin)
+    prefix = (request.headers.get("x-forwarded-prefix") or "").strip().rstrip("/")
+    cookie_path = f"{prefix}/" if prefix.startswith("/") else "/"
 
     response.set_cookie(
         key="sat_tmp_auth",
@@ -449,7 +469,7 @@ def create_front_session(payload: SessionTokenRequest, request: Request, respons
         secure=not is_local,
         samesite="none" if not is_local else "lax",
         max_age=max_age,
-        path="/",
+        path=cookie_path,
     )
 
     return {

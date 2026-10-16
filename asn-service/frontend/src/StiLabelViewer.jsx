@@ -32,7 +32,7 @@ import { Brand } from './theme'
 import { useI18n } from './I18nContext'
 import { alpha } from '@mui/material/styles'
 
-GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
+GlobalWorkerOptions.workerSrc = `${import.meta.env.BASE_URL}pdf.worker.min.mjs`
 
 const STIMULSOFT_SERVICE_URL =
   import.meta.env.VITE_STIMULSOFT_SERVICE_URL ?? '/api/stimulsoft'

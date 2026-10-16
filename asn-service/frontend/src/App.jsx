@@ -23,6 +23,7 @@ import { I18nProvider } from './I18nContext'
 import { EmulationProvider } from './EmulationContext'
 import { getTheme, applyUIPreferencesToDOM } from './theme'
 import { useUmbrellaColors } from './useUmbrellaColors'
+import { getAppPathname } from './satellitePath'
 
 const AvisoEmbarqueTab = lazy(() => import('./AvisoEmbarqueTab'))
 
@@ -117,8 +118,9 @@ async function openAsnSession(token) {
     credentials: 'include',
     body: JSON.stringify({ token }),
   })
-  if (res.ok) return true
-  return false
+  if (res.ok) return { ok: true, detail: '' }
+  const detail = await res.text()
+  return { ok: false, detail: detail || `HTTP ${res.status}` }
 }
 
 // ── Lê todos os parâmetros de contexto da query string
@@ -543,9 +545,49 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    announceUmbrellaReady()
-    setIsAuthorized(true)
-    setAuthReady(true)
+    let cancelled = false
+
+    async function boot() {
+      announceUmbrellaReady()
+      try {
+        let token = getTokenFromUrl()
+        if (!token && isEmbedded()) {
+          token = await waitForUmbrellaToken()
+        }
+
+        let sessionOpened = false
+        if (token) {
+          let opened = await openAsnSession(token)
+          if (!opened.ok) {
+            const access = await exchangeHubToken(token)
+            opened = await openAsnSession(access)
+          }
+          sessionOpened = opened.ok
+          if (!opened.ok) {
+            console.warn('Sessão ASN não aberta.', opened.detail)
+          }
+          cleanupTokenFromUrl()
+        }
+
+        if (sessionOpened) {
+          const res = await fetch(`${API_BASE}/api/auth/session/validate`, { credentials: 'include' })
+          if (res.ok) {
+            const session = await res.json()
+            if (!cancelled) setIsSawluzUser(!!session?.is_sawluz)
+          }
+        }
+      } catch (err) {
+        console.warn('Handshake do Umbrella ignorado.', err?.message || err)
+      }
+
+      if (!cancelled) {
+        setIsAuthorized(true)
+        setAuthReady(true)
+      }
+    }
+
+    boot()
+    return () => { cancelled = true }
   }, [])
 
   // Usado pela EntryScreen (busca manual por idMeta sem idMetaRef)
@@ -565,8 +607,9 @@ export default function App() {
     setCurrentRow(getRowFromUrl())
   }
 
-  const isOpsRoute = window.location.pathname.startsWith('/ops')
-  const isAdminMigrationsRoute = window.location.pathname.startsWith('/admin/migrations')
+  const appPath = getAppPathname()
+  const isOpsRoute = appPath === '/ops' || appPath.startsWith('/ops/')
+  const isAdminMigrationsRoute = appPath === '/admin/migrations' || appPath.startsWith('/admin/migrations/')
   const needsSawluzAccess = isOpsRoute || isAdminMigrationsRoute
 
   if (!authReady) {
