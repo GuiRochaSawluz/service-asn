@@ -182,9 +182,19 @@ Opcionais com default:
 - UMBRELLA_TIMEOUT_SECONDS
   - Default: 5
   - Timeout da chamada de validacao m2m.
+- REPORT_SERVICE_URL
+  - Runtime do container ASN. Nao entra no build do Vite.
+  - Base do report-sat. O caminho precisa terminar em `/reports` quando a chamada passa pelo nginx do satelite, porque esse prefixo e o que chega no motor (`/api/Viewer/PrepareReport` e `/api/Viewer/GetPdf`).
+  - Local (dotnet run do report-sat): `http://127.0.0.1:5000`
+  - HML, chamada interna (mesmo padrao de `helpcenter-g-hml.taggen.local`): `http://report-g-hml.taggen.local/reports`
+  - HML pelo host publico: `https://sat.hmlg.sawluz.net/report-g-hml/reports`
+  - PRD interno: `http://report-g-prd.taggen.local/reports`
+  - PRD publico: `https://sat.sawluz.net/report-g-prd/reports`
+  - O host usa o `PROXY_ROOT_PATH` do satelite de report, sem as barras. Em HML o SW2 ja usa `/report-g-hml`. Se o report estiver publicado com outro slug, troque o nome e mantenha o sufixo `/reports`.
+  - `REPORT_SERVICE_INTERNAL_URL` vale como fallback se `REPORT_SERVICE_URL` estiver vazio.
 - STIMULSOFT_BASE_URL
   - Default: http://127.0.0.1:5055
-  - URL interna do servico de impressao.
+  - Proxy legado em `/api/stimulsoft`. A exibicao da etiqueta do ASN nao usa mais este endereco.
 - ASN_PORT
   - Default: 8003
   - Porta do backend ASN quando executado diretamente.

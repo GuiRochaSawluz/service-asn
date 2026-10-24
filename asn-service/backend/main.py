@@ -16,6 +16,7 @@ Endpoints:
   POST   /api/labels/nfes/{chave_acesso}/save
   POST   /api/labels/sequence/generate
   POST   /api/labels/xml-asn
+  POST   /api/labels/render
   GET    /api/swpaas/mrt-file/{version_id}
   GET    /api/labels/mrt/{filename}
   GET    /api/swpaas/report-labels
@@ -134,6 +135,32 @@ def _now_iso() -> str:
 
 def _get_stimulsoft_base_url() -> str:
     return os.getenv("STIMULSOFT_BASE_URL", "http://127.0.0.1:5055").rstrip("/")
+
+
+def _get_report_service_url() -> str:
+    """Base do report-sat. Inclui /reports quando a chamada passa pelo nginx do satélite.
+
+    Local: http://127.0.0.1:5000
+    HML/PRD: REPORT_SERVICE_URL no runtime do container ASN.
+    """
+    raw = (
+        os.getenv("REPORT_SERVICE_URL")
+        or os.getenv("REPORT_SERVICE_INTERNAL_URL")
+        or ""
+    ).strip().rstrip("/")
+    return raw or "http://127.0.0.1:5000"
+
+
+def _report_prepare_body(mrt_content: str, data: str) -> dict:
+    content = (data or "").strip()
+    is_xml = content.startswith("<")
+    return {
+        "mrtContent": mrt_content,
+        "xmlData": content if is_xml else "",
+        "jsonData": "" if is_xml else content,
+        "datasetName": "DATASET",
+        "resourceName": "DATASET",
+    }
 
 
 def _token_validation_headers(token: str) -> dict:
@@ -528,7 +555,7 @@ def get_me(claims: dict = Depends(_require_temp_token)):
 
 @app.get("/api/system/health", tags=["System"])
 async def unified_health(_claims: dict = Depends(_require_sawluz_operator)):
-    """Health consolidado do ASN e do motor Stimulsoft."""
+    """Health consolidado do ASN, do report-sat e do Stimulsoft legado."""
     stimulsoft_base = _get_stimulsoft_base_url()
 
     asn_status = "ok"
@@ -545,6 +572,9 @@ async def unified_health(_claims: dict = Depends(_require_sawluz_operator)):
 
     stimulsoft_status = "error"
     stimulsoft_detail = None
+    report_base = _get_report_service_url()
+    report_status = "error"
+    report_detail = None
 
     async with httpx.AsyncClient(timeout=3.0) as client:
         try:
@@ -557,11 +587,22 @@ async def unified_health(_claims: dict = Depends(_require_sawluz_operator)):
         except Exception as exc:
             stimulsoft_detail = {"error": str(exc)}
 
-    overall = "ok" if asn_status == "ok" and stimulsoft_status == "ok" else "degraded"
+        try:
+            report_response = await client.get(f"{report_base}/health")
+            if report_response.status_code == 200:
+                report_status = "ok"
+                report_detail = report_response.json()
+            else:
+                report_detail = {"status_code": report_response.status_code}
+        except Exception as exc:
+            report_detail = {"error": str(exc)}
+
+    overall = "ok" if asn_status == "ok" and report_status == "ok" else "degraded"
     return {
         "status": overall,
         "services": {
             "asn": {"status": asn_status, "port": 8003, "database": asn_db},
+            "report": {"status": report_status, "base_url": report_base, "detail": report_detail},
             "stimulsoft": {"status": stimulsoft_status, "base_url": stimulsoft_base, "detail": stimulsoft_detail},
         },
         "timestamp": _now_iso(),
@@ -589,6 +630,67 @@ def unified_stats(_claims: dict = Depends(_require_sawluz_operator)):
             "system": REQUEST_COUNTER["system"],
         },
     }
+
+
+class LabelRenderRequest(BaseModel):
+    mrtContent: str
+    data: str = ""
+
+
+@app.post("/api/labels/render", tags=["Etiquetas"])
+async def render_label_pdf(req: LabelRenderRequest):
+    """Gera o PDF da etiqueta no report-sat (PrepareReport + GetPdf)."""
+    if not (req.mrtContent or "").strip():
+        raise HTTPException(status_code=400, detail="mrtContent é obrigatório.")
+
+    base = _get_report_service_url()
+    body = _report_prepare_body(req.mrtContent, req.data)
+    pdf = None
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(110.0, connect=10.0)) as client:
+            prepared = await client.post(f"{base}/api/Viewer/PrepareReport", json=body)
+            if prepared.status_code >= 400:
+                detail = (prepared.text or "")[:500] or f"HTTP {prepared.status_code}"
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Report recusou a etiqueta ({prepared.status_code}): {detail}",
+                )
+            payload = prepared.json()
+            report_id = payload.get("reportId") if isinstance(payload, dict) else None
+            if not report_id:
+                raise HTTPException(status_code=502, detail="Report não retornou reportId.")
+
+            pdf = await client.get(
+                f"{base}/api/Viewer/GetPdf",
+                params={"reportId": report_id},
+            )
+            if pdf.status_code >= 400 or not pdf.content:
+                detail = (pdf.text or "")[:500] or f"HTTP {pdf.status_code}"
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Report não gerou o PDF ({pdf.status_code}): {detail}",
+                )
+    except HTTPException:
+        raise
+    except httpx.TimeoutException as exc:
+        raise HTTPException(
+            status_code=504,
+            detail=f"Tempo esgotado ao gerar a etiqueta em {base}.",
+        ) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"Não foi possível conectar ao report em {base}. "
+                "Defina REPORT_SERVICE_URL no ASN de HML e PRD."
+            ),
+        ) from exc
+
+    return Response(
+        content=pdf.content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "inline; filename=etiqueta.pdf"},
+    )
 
 
 @app.api_route("/api/stimulsoft/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])

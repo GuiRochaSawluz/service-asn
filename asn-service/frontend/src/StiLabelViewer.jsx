@@ -40,8 +40,6 @@ const STIMULSOFT_SERVICE_URL =
 const ZOOM_PRESETS = [0.75, 1, 1.25, 1.5, 2]
 
 const _mrtCache = new Map()
-const _previewMetadataCache = new Map()
-const _previewThumbnailsCache = new Map()
 
 function triggerDownload(blob, name) {
   const url = URL.createObjectURL(blob)
@@ -73,80 +71,25 @@ async function fetchMrtContent(templateName) {
   return text
 }
 
-async function renderPdf(mrtContent, data, isEtiqueta = false) {
-  const res = await fetch(`${STIMULSOFT_SERVICE_URL}/api/print/pdf-content`, {
+async function renderPdf(mrtContent, data) {
+  const res = await fetch('/api/labels/render', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mrtContent, data, isEtiqueta }),
+    credentials: 'include',
+    body: JSON.stringify({ mrtContent, data }),
   })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }))
-    throw new Error(err.error ?? `Erro ao renderizar PDF (HTTP ${res.status})`)
+    const text = await res.text()
+    let detail = text
+    try {
+      const payload = JSON.parse(text)
+      if (payload?.detail) detail = String(payload.detail)
+    } catch {
+      detail = text
+    }
+    throw new Error(detail || `Erro ao renderizar PDF (HTTP ${res.status})`)
   }
   return res.arrayBuffer()
-}
-
-function toServiceUrl(pathOrUrl) {
-  if (!pathOrUrl) return ''
-  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl
-  return `${STIMULSOFT_SERVICE_URL}${pathOrUrl}`
-}
-
-function buildPreviewCacheKey(mrtContent, data, isEtiqueta = false, format = 'jpeg', thumbDpi = 55) {
-  return `${isEtiqueta ? 1 : 0}|${format}|${thumbDpi}|${mrtContent.length}|${data.length}`
-}
-
-async function fetchPreviewMetadataContent(mrtContent, data, isEtiqueta = false) {
-  const cacheKey = buildPreviewCacheKey(mrtContent, data, isEtiqueta, 'jpeg', 55)
-  if (_previewMetadataCache.has(cacheKey)) return _previewMetadataCache.get(cacheKey)
-
-  const res = await fetch(`${STIMULSOFT_SERVICE_URL}/api/print/preview-metadata-content`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mrtContent, data, isEtiqueta }),
-  })
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }))
-    throw new Error(err.error ?? `Erro ao obter metadata de preview (HTTP ${res.status})`)
-  }
-
-  const payload = await res.json()
-  _previewMetadataCache.set(cacheKey, payload)
-  return payload
-}
-
-async function fetchPreviewThumbnailsContent(mrtContent, data, isEtiqueta = false, thumbDpi = 55, format = 'jpeg') {
-  const cacheKey = buildPreviewCacheKey(mrtContent, data, isEtiqueta, format, thumbDpi)
-  if (_previewThumbnailsCache.has(cacheKey)) return _previewThumbnailsCache.get(cacheKey)
-
-  const res = await fetch(`${STIMULSOFT_SERVICE_URL}/api/print/preview-thumbnails-content`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mrtContent, data, isEtiqueta, thumbDpi, format }),
-  })
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }))
-    throw new Error(err.error ?? `Erro ao obter thumbnails de preview (HTTP ${res.status})`)
-  }
-
-  const payload = await res.json()
-  _previewThumbnailsCache.set(cacheKey, payload)
-  return payload
-}
-
-async function initViewerContent(mrtContent, data, isEtiqueta = false, thumbDpi = 55, format = 'jpeg') {
-  const res = await fetch(`${STIMULSOFT_SERVICE_URL}/api/print/viewer-content/init`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mrtContent, data, isEtiqueta, thumbDpi, format }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }))
-    throw new Error(err.error ?? `Erro ao inicializar sessao do viewer (HTTP ${res.status})`)
-  }
-  return res.json()
 }
 
 async function deleteViewerSession(sessionId) {
@@ -159,15 +102,6 @@ async function deleteViewerSession(sessionId) {
   } catch {
     // sem impacto funcional para o usuario
   }
-}
-
-async function fetchViewerPageImage(sessionId, page, dpi = 130, format = 'jpeg') {
-  const res = await fetch(`${STIMULSOFT_SERVICE_URL}/api/print/viewer-content/${sessionId}/page/${page}?dpi=${dpi}&format=${format}`)
-  if (!res.ok) {
-    throw new Error(`Falha ao obter pagina ${page} (HTTP ${res.status})`)
-  }
-  const blob = await res.blob()
-  return URL.createObjectURL(blob)
 }
 
 function escapeRegExp(value) {
@@ -255,8 +189,6 @@ export default function StiLabelViewer({
   const [activePage, setActivePage] = useState(1)
   const [pageCount, setPageCount] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [viewerSessionId, setViewerSessionId] = useState(null)
-  const [viewerPdfUrl, setViewerPdfUrl] = useState(null)
   const [exporting, setExporting] = useState(false)
 
   const [pdfDoc, setPdfDoc] = useState(null)
@@ -348,38 +280,26 @@ export default function StiLabelViewer({
     setZoom(nextZoom)
   }, [basePageSize.height, basePageSize.width])
 
-  const downloadSessionPdf = useCallback(async () => {
-    const sourceUrl = toServiceUrl(viewerPdfUrl)
-    if (!sourceUrl) throw new Error('PDF da sessao indisponivel')
-    const res = await fetch(sourceUrl)
-    if (!res.ok) throw new Error(`Falha ao obter PDF (HTTP ${res.status})`)
-    return res.blob()
-  }, [viewerPdfUrl])
-
   const exportPdf = useCallback(async () => {
     const safeName = templateName?.split('/').pop()?.replace('.mrt', '.pdf') ?? 'relatorio.pdf'
     setExporting(true)
     try {
-      const blob = await downloadSessionPdf()
-      triggerDownload(blob, safeName)
+      if (!pdfBlobUrl) throw new Error('PDF da etiqueta ainda nao foi gerado.')
+      const res = await fetch(pdfBlobUrl)
+      if (!res.ok) throw new Error(`Falha ao obter PDF (HTTP ${res.status})`)
+      triggerDownload(await res.blob(), safeName)
     } catch (e) {
       console.error('[StiLabelViewer] export error:', e)
       setErrorMsg(e?.message || String(e))
     } finally {
       setExporting(false)
     }
-  }, [downloadSessionPdf, templateName])
+  }, [pdfBlobUrl, templateName])
 
-  const printPdf = useCallback(async () => {
+  const printPdf = useCallback(() => {
     try {
-      let url = pdfBlobUrl
-      if (!url) {
-        const blob = await downloadSessionPdf()
-        url = URL.createObjectURL(blob)
-        pdfBlobUrlRef.current = url
-        setPdfBlobUrl(url)
-      }
-      const win = window.open(url, '_blank')
+      if (!pdfBlobUrl) throw new Error('PDF da etiqueta ainda nao foi gerado.')
+      const win = window.open(pdfBlobUrl, '_blank')
       if (win) {
         win.onload = () => {
           win.focus()
@@ -390,7 +310,7 @@ export default function StiLabelViewer({
       console.error('[StiLabelViewer] print error:', e)
       setErrorMsg(e?.message || String(e))
     }
-  }, [downloadSessionPdf, pdfBlobUrl])
+  }, [pdfBlobUrl])
 
   useEffect(() => {
     if (!templateName || !xmlData) return
@@ -435,13 +355,14 @@ export default function StiLabelViewer({
 
         const data = xmlData || '<DATASET/>'
 
-        if (mode === 'PRINT') {
-          setLoadingMsg(t.sendingToPrint)
-          const pdfBuffer = await renderPdf(mrtContent, data, isEtiqueta)
-          if (cancelled) return
+        setLoadingMsg(t.sendingToPrint)
+        const pdfBuffer = await renderPdf(mrtContent, data)
+        if (cancelled) return
 
-          const blob = new Blob([pdfBuffer], { type: 'application/pdf' })
-          const blobUrl = URL.createObjectURL(blob)
+        const pdfBlob = new Blob([pdfBuffer], { type: 'application/pdf' })
+
+        if (mode === 'PRINT') {
+          const blobUrl = URL.createObjectURL(pdfBlob)
           blobUrlRef.current = blobUrl
 
           const win = window.open(blobUrl, '_blank')
@@ -452,77 +373,18 @@ export default function StiLabelViewer({
             }
           } else {
             const safeName = templateName.split('/').pop()?.replace('.mrt', '.pdf') ?? 'relatorio.pdf'
-            triggerDownload(blob, safeName)
+            triggerDownload(pdfBlob, safeName)
           }
           setLoading(false)
           setTimeout(() => onCloseRef.current?.(), 1200)
           return
         }
 
-        const metadata = await fetchPreviewMetadataContent(mrtContent, data, isEtiqueta)
-        if (cancelled) return
-        setPageCount(Number(metadata?.totalPages || 0))
-
-        const thumbsPayload = await fetchPreviewThumbnailsContent(mrtContent, data, isEtiqueta, 55, 'jpeg')
-        if (cancelled) return
-        const thumbs = (thumbsPayload?.thumbnails || []).map((p) =>
-          `data:image/${p.format || thumbsPayload?.format || 'jpeg'};base64,${p.base64}`
-        )
-        thumbUrlsRef.current = thumbs
-        setThumbnails(thumbs)
-
-        const session = await initViewerContent(mrtContent, data, isEtiqueta, 55, 'jpeg')
-        if (cancelled) return
-
-        setViewerSessionId(session?.sessionId || null)
-        setViewerPdfUrl(session?.pdfUrl || null)
-        sessionIdRef.current = session?.sessionId || null
-        if (session?.sessionId) {
-          deletedSessionIdsRef.current.delete(session.sessionId)
-        }
-        if (!metadata?.totalPages && session?.totalPages) {
-          setPageCount(Number(session.totalPages || 0))
-        }
-
-        if (!session?.sessionId || !session?.pdfUrl) {
-          throw new Error('Sessao do viewer inicializada sem URLs obrigatorias.')
-        }
-
-        if (isEtiqueta) {
-          const totalPages = Number(metadata?.totalPages || session?.totalPages || 0)
-          setPageCount(totalPages)
-          setPageImages(Array.from({ length: totalPages }, () => null))
-          setRenderingPages(true)
-
-          for (let page = 1; page <= totalPages; page += 1) {
-            const pageUrl = await fetchViewerPageImage(session.sessionId, page, 130, 'jpeg')
-            if (cancelled) {
-              if (pageUrl?.startsWith('blob:')) URL.revokeObjectURL(pageUrl)
-              return
-            }
-            pageImageUrlsRef.current.push(pageUrl)
-            setPageImages((prev) => {
-              const next = [...prev]
-              next[page - 1] = pageUrl
-              return next
-            })
-          }
-
-          setRenderingPages(false)
-          setLoading(false)
-          return
-        }
-
-        const sourceUrl = toServiceUrl(session.pdfUrl)
-        const pdfRes = await fetch(sourceUrl)
-        if (!pdfRes.ok) throw new Error(`Falha ao obter PDF da sessao (HTTP ${pdfRes.status})`)
-        const pdfBlob = await pdfRes.blob()
-        const pdfBytes = await pdfBlob.arrayBuffer()
         const localPdfUrl = URL.createObjectURL(pdfBlob)
         pdfBlobUrlRef.current = localPdfUrl
         setPdfBlobUrl(localPdfUrl)
 
-        const loadingTask = getDocument({ data: new Uint8Array(pdfBytes) })
+        const loadingTask = getDocument({ data: new Uint8Array(pdfBuffer) })
         const doc = await loadingTask.promise
         if (cancelled) {
           await doc.destroy()
@@ -530,13 +392,31 @@ export default function StiLabelViewer({
         }
 
         setPdfDoc(doc)
-        setPageCount((current) => (current > 0 ? current : doc.numPages))
+        setPageCount(doc.numPages)
 
         const firstPage = await doc.getPage(1)
         const firstViewport = firstPage.getViewport({ scale: 1 })
         setBasePageSize({ width: firstViewport.width, height: firstViewport.height })
-
         setLoading(false)
+
+        const thumbs = []
+        for (let page = 1; page <= doc.numPages; page += 1) {
+          if (cancelled) return
+          const pdfPage = await doc.getPage(page)
+          const viewport = pdfPage.getViewport({ scale: 0.22 })
+          const canvas = document.createElement('canvas')
+          canvas.width = Math.ceil(viewport.width)
+          canvas.height = Math.ceil(viewport.height)
+          const context = canvas.getContext('2d')
+          if (!context) continue
+          await pdfPage.render({ canvasContext: context, viewport }).promise
+          thumbs.push(canvas.toDataURL('image/jpeg', 0.72))
+          if (!cancelled) {
+            const next = [...thumbs]
+            thumbUrlsRef.current = next
+            setThumbnails(next)
+          }
+        }
       } catch (e) {
         if (cancelled) return
         console.error('[StiLabelViewer] error:', e)
@@ -550,7 +430,6 @@ export default function StiLabelViewer({
   }, [xmlData, templateName, mode, isEtiqueta, safeDeleteViewerSession, t.loadingTemplateAndData, t.sendingToPrint])
 
   useEffect(() => {
-    if (isEtiqueta) return
     if (!pdfDoc || pageCount <= 0) return
     let cancelled = false
 
@@ -574,7 +453,6 @@ export default function StiLabelViewer({
   }, [pdfDoc, pageCount, isEtiqueta])
 
   useEffect(() => {
-    if (isEtiqueta) return
     if (!pdfDoc || pageCount <= 0) return
     let cancelled = false
 
@@ -873,7 +751,6 @@ export default function StiLabelViewer({
             </Button>
           </Box>
 
-          {!isEtiqueta && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: { xs: 0, md: 1 } }}>
             <TextField
               size="small"
@@ -911,7 +788,6 @@ export default function StiLabelViewer({
                 : (searchTerm ? (t.noResults || 'Sem resultados') : '')}
             </Typography>
           </Box>
-          )}
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 'auto' }}>
             <Button
@@ -1226,8 +1102,6 @@ export default function StiLabelViewer({
                 const page = idx + 1
                 const hit = searchHits.find((h) => h.page === page)
                 const isSearchTarget = searchIndex >= 0 && searchHits[searchIndex]?.page === page
-                const pageImageUrl = pageImages[idx]
-                const pageWidth = basePageSize.width > 0 ? Math.max(120, Math.round(basePageSize.width * zoom)) : null
                 return (
                   <Box
                     key={`pdf-page-${page}`}
@@ -1243,33 +1117,7 @@ export default function StiLabelViewer({
                       transition: 'all 0.2s ease',
                     }}
                   >
-                    {isEtiqueta ? (
-                      pageImageUrl ? (
-                        <Box
-                          component="img"
-                          src={pageImageUrl}
-                          alt={`${t.page || 'Pagina'} ${page}`}
-                          draggable={false}
-                          onLoad={(e) => {
-                            if (basePageSize.width > 0) return
-                            const naturalWidth = e.currentTarget.naturalWidth || 0
-                            const naturalHeight = e.currentTarget.naturalHeight || 0
-                            if (naturalWidth > 0 && naturalHeight > 0) {
-                              setBasePageSize({ width: naturalWidth, height: naturalHeight })
-                            }
-                          }}
-                          sx={{
-                            width: pageWidth ? `${pageWidth}px` : 'auto',
-                            maxWidth: '100%',
-                            display: 'block',
-                          }}
-                        />
-                      ) : (
-                        <Box sx={{ width: pageWidth ? `${pageWidth}px` : 420, maxWidth: '100%', height: 540, bgcolor: '#f5f5f5', borderRadius: 0.5 }} />
-                      )
-                    ) : (
-                      <canvas ref={(el) => { canvasRefs.current[idx] = el }} />
-                    )}
+                    <canvas ref={(el) => { canvasRefs.current[idx] = el }} />
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.75 }}>
                       <Typography sx={{ fontSize: 10, color: '#6b7280' }}>{t.page || 'Pagina'} {page}</Typography>
                       {hit ? (

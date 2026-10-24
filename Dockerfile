@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # ASN Service (Enzo): frontend Vite + API FastAPI atrás do Nginx na porta 80.
-# Stimulsoft fica fora desta imagem. Aponte STIMULSOFT_BASE_URL para o serviço de etiquetas.
+# A etiqueta e gerada no report-sat. Defina REPORT_SERVICE_URL no runtime de HML e PRD.
 #
 # Contexto: Enzo/Shared-microservices-enzo
 #   docker build -f Dockerfile -t asn-service:latest .

@@ -284,6 +284,7 @@ function OpsScreen() {
 
   const serviceItems = [
     { name: 'ASN API', data: health?.services?.asn },
+    { name: 'Report', data: health?.services?.report },
     { name: 'Stimulsoft', data: health?.services?.stimulsoft },
   ]
 
