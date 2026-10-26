@@ -199,7 +199,9 @@ async def get_conteudo_arquivo(id_meta: int, tipo: str = "edi") -> str:
     res = await _request("get", url)
 
     if res.status_code != 200:
-        raise RuntimeError(f"SwPaaS ConteudoArquivo/{id_meta}/edi: HTTP {res.status_code}")
+        raise RuntimeError(
+            f"SwPaaS ConteudoArquivo/{id_meta}/edi: HTTP {res.status_code} ({SWPAAS_BASE}, SWPAAS_ENV={_ENV})"
+        )
 
     raw = res.text.strip()
     try:
