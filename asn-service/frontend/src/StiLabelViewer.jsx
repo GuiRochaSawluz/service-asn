@@ -29,10 +29,12 @@ import LocalPrintshopIcon from '@mui/icons-material/LocalPrintshop'
 import SaveIcon from '@mui/icons-material/Save'
 import { getDocument, GlobalWorkerOptions, Util } from 'pdfjs-dist'
 import { Brand } from './theme'
+import { getSlugPrefix } from './satellitePath'
 import { useI18n } from './I18nContext'
 import { alpha } from '@mui/material/styles'
 
-GlobalWorkerOptions.workerSrc = `${import.meta.env.BASE_URL}pdf.worker.min.mjs`
+// Com base "./" o pdf.js resolveria o worker a partir de assets/, onde o arquivo não existe.
+GlobalWorkerOptions.workerSrc = `${window.location.origin}${getSlugPrefix()}/pdf.worker.min.mjs`
 
 const STIMULSOFT_SERVICE_URL =
   import.meta.env.VITE_STIMULSOFT_SERVICE_URL ?? '/api/stimulsoft'
