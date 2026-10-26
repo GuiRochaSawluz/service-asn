@@ -192,6 +192,12 @@ Opcionais com default:
   - PRD publico: `https://sat.sawluz.net/report-g-prd/reports`
   - O host usa o `PROXY_ROOT_PATH` do satelite de report, sem as barras. Em HML o SW2 ja usa `/report-g-hml`. Se o report estiver publicado com outro slug, troque o nome e mantenha o sufixo `/reports`.
   - `REPORT_SERVICE_INTERNAL_URL` vale como fallback se `REPORT_SERVICE_URL` estiver vazio.
+- REPORT_BASE_PATH
+  - Alternativa a `REPORT_SERVICE_URL`, no mesmo formato do SW2 (`NEXT_PUBLIC_REPORT_BASE_PATH`). Ex.: `/report-g-prd`.
+  - O ASN monta `{origem}/report-g-prd/reports`. A origem vem de `REPORT_PUBLIC_ORIGIN` ou, se vazia, do host publico da requisicao recebida (`X-Forwarded-Host`/`Host`).
+  - So e usada quando `REPORT_SERVICE_URL` e `REPORT_SERVICE_INTERNAL_URL` estao vazias.
+- REPORT_PUBLIC_ORIGIN
+  - Opcional. Ex.: `https://sat.sawluz.net`. Use se o proxy nao repassar o host publico ao container.
 - STIMULSOFT_BASE_URL
   - Default: http://127.0.0.1:5055
   - Proxy legado em `/api/stimulsoft`. A exibicao da etiqueta do ASN nao usa mais este endereco.

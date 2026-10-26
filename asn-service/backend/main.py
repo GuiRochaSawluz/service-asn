@@ -137,18 +137,42 @@ def _get_stimulsoft_base_url() -> str:
     return os.getenv("STIMULSOFT_BASE_URL", "http://127.0.0.1:5055").rstrip("/")
 
 
-def _get_report_service_url() -> str:
+def _request_public_origin(request: Optional[Request]) -> str:
+    if request is None:
+        return ""
+    headers = request.headers
+    host = (headers.get("x-forwarded-host") or headers.get("host") or "").split(",")[0].strip()
+    if not host:
+        return ""
+    proto = (headers.get("x-forwarded-proto") or request.url.scheme or "https").split(",")[0].strip()
+    return f"{proto}://{host}"
+
+
+def _get_report_service_url(request: Optional[Request] = None) -> str:
     """Base do report-sat. Inclui /reports quando a chamada passa pelo nginx do satélite.
 
     Local: http://127.0.0.1:5000
-    HML/PRD: REPORT_SERVICE_URL no runtime do container ASN.
+    HML/PRD: REPORT_SERVICE_URL (URL completa) ou REPORT_BASE_PATH (ex.: /report-g-prd),
+    resolvido sobre REPORT_PUBLIC_ORIGIN ou sobre o host público da requisição recebida.
     """
     raw = (
         os.getenv("REPORT_SERVICE_URL")
         or os.getenv("REPORT_SERVICE_INTERNAL_URL")
         or ""
     ).strip().rstrip("/")
-    return raw or "http://127.0.0.1:5000"
+    if raw:
+        return raw
+
+    base_path = os.getenv("REPORT_BASE_PATH", "").strip().strip("/")
+    if base_path:
+        origin = (
+            os.getenv("REPORT_PUBLIC_ORIGIN", "").strip().rstrip("/")
+            or _request_public_origin(request)
+        )
+        if origin:
+            return f"{origin}/{base_path}/reports"
+
+    return "http://127.0.0.1:5000"
 
 
 def _report_prepare_body(mrt_content: str, data: str) -> dict:
@@ -554,7 +578,7 @@ def get_me(claims: dict = Depends(_require_temp_token)):
 
 
 @app.get("/api/system/health", tags=["System"])
-async def unified_health(_claims: dict = Depends(_require_sawluz_operator)):
+async def unified_health(request: Request, _claims: dict = Depends(_require_sawluz_operator)):
     """Health consolidado do ASN, do report-sat e do Stimulsoft legado."""
     stimulsoft_base = _get_stimulsoft_base_url()
 
@@ -572,7 +596,7 @@ async def unified_health(_claims: dict = Depends(_require_sawluz_operator)):
 
     stimulsoft_status = "error"
     stimulsoft_detail = None
-    report_base = _get_report_service_url()
+    report_base = _get_report_service_url(request)
     report_status = "error"
     report_detail = None
 
@@ -638,12 +662,12 @@ class LabelRenderRequest(BaseModel):
 
 
 @app.post("/api/labels/render", tags=["Etiquetas"])
-async def render_label_pdf(req: LabelRenderRequest):
+async def render_label_pdf(req: LabelRenderRequest, request: Request):
     """Gera o PDF da etiqueta no report-sat (PrepareReport + GetPdf)."""
     if not (req.mrtContent or "").strip():
         raise HTTPException(status_code=400, detail="mrtContent é obrigatório.")
 
-    base = _get_report_service_url()
+    base = _get_report_service_url(request)
     body = _report_prepare_body(req.mrtContent, req.data)
     pdf = None
     try:
@@ -681,7 +705,8 @@ async def render_label_pdf(req: LabelRenderRequest):
         raise HTTPException(
             status_code=502,
             detail=(
-                f"Não foi possível conectar ao report em {base}. "
+                f"Não foi possível conectar ao report em {base} "
+                f"({type(exc).__name__}: {exc}). "
                 "Defina REPORT_SERVICE_URL no ASN de HML e PRD."
             ),
         ) from exc
