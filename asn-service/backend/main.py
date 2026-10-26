@@ -30,6 +30,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import os
 import subprocess
 from contextlib import asynccontextmanager
@@ -58,6 +59,8 @@ from models import (
     GerarRequest,
     GerarResponse,
 )
+
+logger = logging.getLogger("asn")
 
 
 # ── Lifespan ────────────────────────────────────────────────────────────────────
@@ -144,8 +147,10 @@ def _request_public_origin(request: Optional[Request]) -> str:
     host = (headers.get("x-forwarded-host") or headers.get("host") or "").split(",")[0].strip()
     if not host:
         return ""
-    proto = (headers.get("x-forwarded-proto") or request.url.scheme or "https").split(",")[0].strip()
-    return f"{proto}://{host}"
+    # O nginx do container repassa X-Forwarded-Proto=$scheme (http atrás do ALB), e o ALB
+    # responde 301 para chamadas http; por isso só localhost usa http.
+    is_local = host.split(":")[0] in {"localhost", "127.0.0.1"}
+    return f"{'http' if is_local else 'https'}://{host}"
 
 
 def _get_report_service_url(request: Optional[Request] = None) -> str:
@@ -679,10 +684,20 @@ async def render_label_pdf(req: LabelRenderRequest, request: Request):
                     status_code=502,
                     detail=f"Report recusou a etiqueta ({prepared.status_code}): {detail}",
                 )
-            payload = prepared.json()
+            try:
+                payload = prepared.json()
+            except ValueError:
+                payload = None
             report_id = payload.get("reportId") if isinstance(payload, dict) else None
             if not report_id:
-                raise HTTPException(status_code=502, detail="Report não retornou reportId.")
+                snippet = (prepared.text or "")[:300]
+                raise HTTPException(
+                    status_code=502,
+                    detail=(
+                        f"Report não retornou reportId em {base}/api/Viewer/PrepareReport "
+                        f"(HTTP {prepared.status_code}, {prepared.headers.get('content-type', '?')}): {snippet}"
+                    ),
+                )
 
             pdf = await client.get(
                 f"{base}/api/Viewer/GetPdf",
@@ -709,6 +724,12 @@ async def render_label_pdf(req: LabelRenderRequest, request: Request):
                 f"({type(exc).__name__}: {exc}). "
                 "Defina REPORT_SERVICE_URL no ASN de HML e PRD."
             ),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Falha ao gerar etiqueta no report %s", base)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Falha ao gerar etiqueta no report {base}: {type(exc).__name__}: {exc}",
         ) from exc
 
     return Response(
