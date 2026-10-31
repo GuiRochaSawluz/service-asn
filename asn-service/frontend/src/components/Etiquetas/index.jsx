@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { Box, Alert } from '@mui/material'
+import { Box, Alert, Button } from '@mui/material'
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import { getEtiquetasTheme } from './EtiquetasTheme'
 import { getFinalXmlString } from '../../labelXml'
 import LabelPagedViewer from '../../LabelPagedViewer'
@@ -11,6 +12,7 @@ import TemplateSelector from './TemplateSelector'
 import ProdutoManualDialog from './ProdutoManualDialog'
 import GeracaoLoteDialog from './GeracaoLoteDialog'
 import CamposFaltantesPanel from './CamposFaltantesPanel'
+import NotaAsnDocumento from './NotaAsnDocumento'
 
 const XML_ASN_KWS = ['xml-asn', 'xmlasn', 'desadv', 'asn', '856', '004']
 
@@ -86,6 +88,9 @@ export default function EtiquetasTab({ row, mode = 'light', customColors = {}, a
 
   const [produtoDialogOpen, setProdutoDialogOpen] = useState(false)
   const [editingProduto, setEditingProduto] = useState(null)
+  const [cabecalho, setCabecalho] = useState(null)
+  // documento = visão NF (estilo procNFe); etiquetas = workspace UC do item
+  const [viewMode, setViewMode] = useState(() => (avisoItem ? 'etiquetas' : 'documento'))
 
   const chaveAcesso = row?.XML_ChaveDocumentoFiscal || row?.IdMeta?.toString() || ''
   const aliasEmitente = row?.AliasEntidadeEmissora || ''
@@ -98,6 +103,7 @@ export default function EtiquetasTab({ row, mode = 'light', customColors = {}, a
     if (!parsed) return
     setXmlRaw(parsed.xmlRaw || null)
     setParseResumo(parsed.resumo || null)
+    setCabecalho(parsed.cabecalho || null)
 
     const exp = parsed.expedicao || {}
     setExpedicao({
@@ -106,6 +112,10 @@ export default function EtiquetasTab({ row, mode = 'light', customColors = {}, a
       clienteCodigo: exp.clienteCodigo || '',
       numDocto: exp.numDocto || row?.NumeroDocto || '',
       localEntrega: exp.localEntrega || '',
+      pesoBruto: exp.pesoBruto || '',
+      pesoLiquido: exp.pesoLiquido || '',
+      totalVolumes: exp.totalVolumes || '',
+      dtHrEmbarque: exp.dtHrEmbarque || '',
     })
 
     const parsedItems = (parsed.items || []).map(it => ({
@@ -113,14 +123,21 @@ export default function EtiquetasTab({ row, mode = 'light', customColors = {}, a
       produtoLocal: it.produtoLocal || '',
       produtoCliente: it.produtoCliente || '',
       qtdFaturada: it.qtdFaturada || '0',
+      unidade: it.unidade || 'PC',
       numPedido: it.numPedido || '',
+      cfop: it.cfop || '',
+      descricao: it.descricao || '',
+      valorUnitario: it.valorUnitario || '',
+      valorTotal: it.valorTotal || '',
       totalDefaultUcsPorUm: it.totalDefaultUcsPorUm || '',
       source: 'xml-asn',
     }))
 
     if (parsedItems.length > 0) {
       setItems(parsedItems)
-      setSelOcc(prev => prev || parsedItems[0].occ)
+      // Na visão documento não pré-seleciona; na etiquetas (avisoItem) mantém
+      if (avisoItem) setSelOcc(prev => prev || parsedItems[0].occ)
+      else if (!avisoItem) setViewMode('documento')
     }
 
     const fromXml = (parsed.etiquetas || []).map(e => ({
@@ -140,7 +157,7 @@ export default function EtiquetasTab({ row, mode = 'light', customColors = {}, a
     if (parsed.resumo?.precisaGerarLoteUc || parsed.resumo?.precisaPreencherManual || fromXml.length === 0) {
       setMissingOpen(true)
     }
-  }, [row?.NumeroDocto])
+  }, [row?.NumeroDocto, avisoItem])
 
   useEffect(() => {
     if (!chaveAcesso) return
@@ -362,12 +379,47 @@ export default function EtiquetasTab({ row, mode = 'light', customColors = {}, a
 
   const handleFocusMissingField = (fieldKey) => {
     setHighlightField(fieldKey)
+    setViewMode('etiquetas')
     // Preferir item que tenha gap nesse campo
     const target = etiquetas.find(e =>
       (e.camposFaltantes || []).some(m => m.key === fieldKey)
     )
     if (target?.itemOcc) setSelOcc(target.itemOcc)
   }
+
+  const handleSelectItemFromDoc = (item) => {
+    if (!item?.occ) return
+    setSelOcc(item.occ)
+    setViewMode('etiquetas')
+    setMissingOpen(true)
+  }
+
+  const handleRetryParse = () => {
+    setXmlRaw(null)
+    setXmlError(null)
+    // loadXmlAsn só roda se xmlRaw for null — força no próximo tick
+    Promise.resolve().then(() => {
+      if (!metaIds.length) return
+      setXmlLoading(true)
+      fetch('/api/labels/xml-asn/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meta_ids: metaIds }),
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            const errBody = await res.json().catch(() => ({}))
+            throw new Error(errBody.detail || `HTTP ${res.status}`)
+          }
+          return res.json()
+        })
+        .then((parsed) => applyParsed(parsed, { mergeSaved: false }))
+        .catch((err) => setXmlError(err.message))
+        .finally(() => setXmlLoading(false))
+    })
+  }
+
+  const showDocumento = viewMode === 'documento' && !avisoItem
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -399,6 +451,8 @@ export default function EtiquetasTab({ row, mode = 'light', customColors = {}, a
         onSave={() => saveToDb()}
         onUploadClick={() => fileInputRef.current?.click()}
         onShowMissing={() => setMissingOpen(v => !v)}
+        onShowDocumento={!avisoItem ? () => setViewMode('documento') : undefined}
+        viewMode={viewMode}
       />
 
       {saveMsg && (
@@ -408,50 +462,87 @@ export default function EtiquetasTab({ row, mode = 'light', customColors = {}, a
         </Alert>
       )}
 
-      <CamposFaltantesPanel
-        theme={theme}
-        resumo={parseResumo}
-        open={missingOpen}
-        onToggle={() => setMissingOpen(v => !v)}
-        onGerarLote={() => setLoteOpen(true)}
-        onFocusField={handleFocusMissingField}
-      />
-
-      <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <ProductList
+      {showDocumento ? (
+        <NotaAsnDocumento
           theme={theme}
+          cabecalho={cabecalho}
+          expedicao={expedicao}
           items={items}
-          selectedItemOcc={selectedItemOcc}
-          xmlRaw={xmlRaw}
-          xmlLoading={xmlLoading}
-          volByItem={volByItem}
           etiquetas={etiquetas}
-          onSelect={setSelOcc}
-          onAddManual={handleOpenNovoProduto}
-          onEdit={handleOpenEditarProduto}
-          onDelete={handleDeleteProduto}
+          xmlLoading={xmlLoading}
+          xmlError={xmlError}
+          onSelectItem={handleSelectItemFromDoc}
+          onRetry={handleRetryParse}
+          aliasEmitente={aliasEmitente}
+          aliasDestinatario={aliasDestinatario}
         />
+      ) : (
+        <>
+          {!avisoItem && (
+            <Box sx={{ px: 2, pt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Button
+                size="small"
+                startIcon={<ArrowBackIcon sx={{ fontSize: 14 }} />}
+                onClick={() => setViewMode('documento')}
+                sx={{ textTransform: 'none', fontSize: 11, color: theme.textMuted }}
+              >
+                Voltar ao documento
+              </Button>
+              {currentItem && (
+                <Alert severity="info" sx={{ fontSize: 11, py: 0, flex: 1 }}>
+                  Etiquetas do item <strong>{currentItem.produtoCliente || currentItem.produtoLocal || currentItem.occ}</strong>
+                  {' '}— qtd {currentItem.qtdFaturada}
+                </Alert>
+              )}
+            </Box>
+          )}
 
-        <EtiquetasGrid
-          theme={theme}
-          currentItem={currentItem}
-          itemsCount={items.length}
-          xmlRaw={xmlRaw}
-          metaIds={metaIds}
-          currentEtiquetas={currentEtiquetas}
-          loading={loading}
-          allowedVol={allowedVol}
-          currentVol={currentVol}
-          volExcedido={volExcedido}
-          volCompleto={volCompleto}
-          highlightField={highlightField}
-          onAddManual={handleAddManual}
-          onLoteOpen={() => setLoteOpen(true)}
-          handleDelete={handleDelete}
-          handleToggleSelected={handleToggleSelected}
-          handleUpdateEtiqueta={handleUpdateEtiqueta}
-        />
-      </Box>
+          <CamposFaltantesPanel
+            theme={theme}
+            resumo={parseResumo}
+            open={missingOpen}
+            onToggle={() => setMissingOpen(v => !v)}
+            onGerarLote={() => setLoteOpen(true)}
+            onFocusField={handleFocusMissingField}
+          />
+
+          <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+            <ProductList
+              theme={theme}
+              items={items}
+              selectedItemOcc={selectedItemOcc}
+              xmlRaw={xmlRaw}
+              xmlLoading={xmlLoading}
+              volByItem={volByItem}
+              etiquetas={etiquetas}
+              onSelect={setSelOcc}
+              onAddManual={handleOpenNovoProduto}
+              onEdit={handleOpenEditarProduto}
+              onDelete={handleDeleteProduto}
+            />
+
+            <EtiquetasGrid
+              theme={theme}
+              currentItem={currentItem}
+              itemsCount={items.length}
+              xmlRaw={xmlRaw}
+              metaIds={metaIds}
+              currentEtiquetas={currentEtiquetas}
+              loading={loading}
+              allowedVol={allowedVol}
+              currentVol={currentVol}
+              volExcedido={volExcedido}
+              volCompleto={volCompleto}
+              highlightField={highlightField}
+              onAddManual={handleAddManual}
+              onLoteOpen={() => setLoteOpen(true)}
+              handleDelete={handleDelete}
+              handleToggleSelected={handleToggleSelected}
+              handleUpdateEtiqueta={handleUpdateEtiqueta}
+            />
+          </Box>
+        </>
+      )}
 
       <TemplateSelector
         open={tplOpen}

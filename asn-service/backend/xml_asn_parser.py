@@ -150,6 +150,21 @@ def parse_xml_asn(xml_content: str | bytes) -> dict[str, Any]:
     cab_el = root.find(".//Tb_ASNCabecalho")
     exp_el = root.find(".//Expedicao")
     header_el = root.find(".//Tb_HeaderEDI")
+    valores_el = root.find(".//ValoresTotais")
+    tx_el = root.find(".//ParceiroTransmissor")
+    rx_el = root.find(".//ParceiroReceptor")
+
+    def _parceiro(el: ET.Element | None) -> dict[str, str]:
+        if el is None:
+            return {"idEdi": "", "codigo": "", "nome": "", "razaoSocial": "", "endereco": "", "comCode": ""}
+        return {
+            "idEdi": _txt(el, "DbParceiroIdEDI"),
+            "codigo": _txt(el, "DbParceiroCodigo"),
+            "nome": _txt(el, "DbParceiroNome"),
+            "razaoSocial": _txt(el, "DbParceiroRazaoSocial") or _txt(el, "DbParceiroNome"),
+            "endereco": _txt(el, "DbParceiroEndereco"),
+            "comCode": _txt(el, "DbParceiroComCode"),
+        }
 
     cabecalho = {
         "chaveNfe": _txt(cab_el, "DbChaveNFe"),
@@ -157,12 +172,23 @@ def parse_xml_asn(xml_content: str | bytes) -> dict[str, Any]:
         "serie": _txt(cab_el, "DbSerie"),
         "especie": _txt(cab_el, "DbEspecie"),
         "dataEmissao": _txt(cab_el, "DbDataEmissao"),
+        "dataVencimento": _txt(cab_el, "DbDataVencimento"),
         "cfop": _txt(cab_el, "DbCFOP"),
         "naturezaOperacao": _txt(cab_el, "DbNaturezaOperacao"),
         "parceiroLocal": _txt(cab_el, "DbSWEDI_ParceiroLocal") or _txt(header_el, "DbSWEDI_ParceiroLocal"),
         "parceiroExterno": _txt(cab_el, "DbSWEDI_ParceiroExterno") or _txt(header_el, "DbSWEDI_ParceiroExterno"),
         "clienteCodigo": _txt(cab_el, "DbSWEDI_ClienteCodigo"),
         "dtHrMovimento": _txt(cab_el, "DbDtHrMovimento"),
+        "emitente": _parceiro(tx_el),
+        "destinatario": _parceiro(rx_el),
+        "valores": {
+            "valorTotal": _txt(valores_el, "DbValorTotal"),
+            "baseIcms": _txt(valores_el, "DbBaseICMS"),
+            "valorIcms": _txt(valores_el, "DbValorICMS"),
+            "valorIpi": _txt(valores_el, "DbValorIPI"),
+            "valorFrete": _txt(valores_el, "DbValorFrete"),
+            "valorDesconto": _txt(valores_el, "DbValorDesconto"),
+        },
     }
 
     expedicao = {

@@ -5,6 +5,7 @@ import PrintIcon from '@mui/icons-material/Print'
 import SaveIcon from '@mui/icons-material/Save'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
+import DescriptionIcon from '@mui/icons-material/Description'
 
 export default function EtiquetasToolbar({
   theme,
@@ -26,6 +27,8 @@ export default function EtiquetasToolbar({
   onSave,
   onUploadClick,
   onShowMissing,
+  onShowDocumento,
+  viewMode,
 }) {
   const gaps =
     (parseResumo?.gapsCriticos || 0) +
@@ -75,6 +78,23 @@ export default function EtiquetasToolbar({
       )}
 
       <Box sx={{ flex: 1 }} />
+
+      {onShowDocumento && (
+        <Tooltip title="Visão do documento (estilo NF)" arrow>
+          <Button size="small" variant={viewMode === 'documento' ? 'contained' : 'outlined'}
+            startIcon={<DescriptionIcon fontSize="small" />}
+            onClick={onShowDocumento}
+            sx={{
+              textTransform: 'none', fontSize: 11, py: 0.4,
+              bgcolor: viewMode === 'documento' ? theme.primary : 'transparent',
+              borderColor: viewMode === 'documento' ? theme.primary : theme.borderInput,
+              color: viewMode === 'documento' ? '#fff' : theme.textMuted,
+              '&:hover': { borderColor: theme.primary, color: viewMode === 'documento' ? '#fff' : theme.primary },
+            }}>
+            Documento
+          </Button>
+        </Tooltip>
+      )}
 
       <Tooltip title="Carregar mensagem XML-ASN (.edi / .xml)" arrow>
         <Button size="small" variant="outlined"
