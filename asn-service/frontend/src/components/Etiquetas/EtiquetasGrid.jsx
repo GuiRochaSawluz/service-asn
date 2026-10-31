@@ -13,7 +13,20 @@ const fmtDate = (d) => {
   return d
 }
 
-const buildLabelColumns = (theme) => [
+const missingKeys = (row) => new Set((row?.camposFaltantes || []).map(m => m.key))
+
+const cellMissingSx = (theme, row, key, base = {}) => {
+  const miss = missingKeys(row).has(key)
+  if (!miss) return base
+  return {
+    ...base,
+    bgcolor: `${theme.warning}18`,
+    outline: `1px dashed ${theme.warning}66`,
+    outlineOffset: -1,
+  }
+}
+
+const buildLabelColumns = (theme, highlightField) => [
   {
     id: 'sel', header: '', size: 36, enableEditing: false,
     Cell: ({ row: r, table }) => (
@@ -24,47 +37,90 @@ const buildLabelColumns = (theme) => [
   },
   {
     accessorKey: 'numeroUM', header: 'UM (Pallet)', size: 130, enableEditing: true,
-    muiTableBodyCellProps: { sx: { fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: theme.primary } },
-    muiEditTextFieldProps: { variant: 'standard', sx: editInputSx(theme) },
+    muiTableBodyCellProps: ({ row }) => ({
+      sx: cellMissingSx(theme, row.original, 'numeroUM', {
+        fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: theme.primary,
+        ...(highlightField === 'numeroUM' ? { boxShadow: `inset 0 0 0 2px ${theme.primary}` } : {}),
+      }),
+    }),
+    muiEditTextFieldProps: { variant: 'standard', sx: editInputSx(theme), placeholder: 'Preencher UM' },
   },
   {
     accessorKey: 'numeroUC', header: 'UC (Caixa)', size: 130, enableEditing: true,
-    muiTableBodyCellProps: { sx: { fontFamily: 'monospace', fontSize: 11 } },
-    muiEditTextFieldProps: { variant: 'standard', sx: editInputSx(theme) },
+    muiTableBodyCellProps: ({ row }) => ({
+      sx: cellMissingSx(theme, row.original, 'numeroUC', {
+        fontFamily: 'monospace', fontSize: 11,
+        ...(highlightField === 'numeroUC' ? { boxShadow: `inset 0 0 0 2px ${theme.primary}` } : {}),
+      }),
+    }),
+    muiEditTextFieldProps: { variant: 'standard', sx: editInputSx(theme), placeholder: 'Preencher UC' },
   },
   {
     accessorKey: 'quantidadePecasUC', header: 'Qtd Peças', size: 80, enableEditing: true,
     Cell: ({ cell }) => Number(cell.getValue() || 0).toFixed(0),
+    muiTableBodyCellProps: ({ row }) => ({
+      sx: cellMissingSx(theme, row.original, 'quantidadePecasUC',
+        highlightField === 'quantidadePecasUC' ? { boxShadow: `inset 0 0 0 2px ${theme.primary}` } : {}),
+    }),
     muiEditTextFieldProps: { variant: 'standard', type: 'number', sx: editInputSx(theme) },
   },
   {
     accessorKey: 'ran', header: 'RAN', size: 110, enableEditing: true,
-    muiTableBodyCellProps: { sx: { fontWeight: 600 } },
+    muiTableBodyCellProps: ({ row }) => ({
+      sx: cellMissingSx(theme, row.original, 'ran', {
+        fontWeight: 600,
+        ...(highlightField === 'ran' ? { boxShadow: `inset 0 0 0 2px ${theme.primary}` } : {}),
+      }),
+    }),
     muiEditTextFieldProps: { variant: 'standard', sx: editInputSx(theme) },
   },
   {
     accessorKey: 'localUtilizacao', header: 'Local Uso', size: 110, enableEditing: true,
+    muiTableBodyCellProps: ({ row }) => ({
+      sx: cellMissingSx(theme, row.original, 'localUtilizacao',
+        highlightField === 'localUtilizacao' ? { boxShadow: `inset 0 0 0 2px ${theme.primary}` } : {}),
+    }),
     muiEditTextFieldProps: { variant: 'standard', sx: editInputSx(theme) },
   },
   {
     accessorKey: 'doca', header: 'Doca', size: 80, enableEditing: true,
+    muiTableBodyCellProps: ({ row }) => ({
+      sx: cellMissingSx(theme, row.original, 'doca',
+        highlightField === 'doca' ? { boxShadow: `inset 0 0 0 2px ${theme.primary}` } : {}),
+    }),
     muiEditTextFieldProps: { variant: 'standard', sx: editInputSx(theme) },
   },
   {
     accessorKey: 'codigoEmbalagemUC', header: 'Emb. UC', size: 90, enableEditing: true,
+    muiTableBodyCellProps: ({ row }) => ({
+      sx: cellMissingSx(theme, row.original, 'codigoEmbalagemUC',
+        highlightField === 'codigoEmbalagemUC' ? { boxShadow: `inset 0 0 0 2px ${theme.primary}` } : {}),
+    }),
     muiEditTextFieldProps: { variant: 'standard', sx: editInputSx(theme) },
   },
   {
     accessorKey: 'lote', header: 'Lote', size: 90, enableEditing: true,
+    muiTableBodyCellProps: ({ row }) => ({
+      sx: cellMissingSx(theme, row.original, 'lote',
+        highlightField === 'lote' ? { boxShadow: `inset 0 0 0 2px ${theme.primary}` } : {}),
+    }),
     muiEditTextFieldProps: { variant: 'standard', sx: editInputSx(theme) },
   },
   {
     accessorKey: 'dataFabricacao', header: 'Dt. Fab.', size: 100, enableEditing: true,
     Cell: ({ cell }) => fmtDate(cell.getValue()),
+    muiTableBodyCellProps: ({ row }) => ({
+      sx: cellMissingSx(theme, row.original, 'dataFabricacao',
+        highlightField === 'dataFabricacao' ? { boxShadow: `inset 0 0 0 2px ${theme.primary}` } : {}),
+    }),
     muiEditTextFieldProps: { variant: 'standard', placeholder: 'YYYY/MM/DD', sx: editInputSx(theme) },
   },
   {
     accessorKey: 'numeroDocumento', header: 'No. Docto', size: 100, enableEditing: true,
+    muiTableBodyCellProps: ({ row }) => ({
+      sx: cellMissingSx(theme, row.original, 'numeroDocumento',
+        highlightField === 'numeroDocumento' ? { boxShadow: `inset 0 0 0 2px ${theme.primary}` } : {}),
+    }),
     muiEditTextFieldProps: { variant: 'standard', sx: editInputSx(theme) },
   },
 ]
@@ -81,6 +137,7 @@ export default function EtiquetasGrid({
   currentVol,
   volExcedido,
   volCompleto,
+  highlightField,
   onAddManual,
   onLoteOpen,
   handleDelete,
@@ -88,7 +145,7 @@ export default function EtiquetasGrid({
   handleUpdateEtiqueta
 }) {
   const columns = useMemo(() => [
-    ...buildLabelColumns(theme),
+    ...buildLabelColumns(theme, highlightField),
     {
       id: 'actions', header: '', size: 48, enableEditing: false,
       Cell: ({ row: r }) => (
@@ -100,7 +157,7 @@ export default function EtiquetasGrid({
         </Tooltip>
       ),
     },
-  ], [theme, handleDelete])
+  ], [theme, handleDelete, highlightField])
 
   const table = useMaterialReactTable({
     columns,

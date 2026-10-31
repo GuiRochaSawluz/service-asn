@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Box, Alert } from '@mui/material'
 import { getEtiquetasTheme } from './EtiquetasTheme'
 import { getFinalXmlString } from '../../labelXml'
@@ -10,19 +10,42 @@ import EtiquetasGrid from './EtiquetasGrid'
 import TemplateSelector from './TemplateSelector'
 import ProdutoManualDialog from './ProdutoManualDialog'
 import GeracaoLoteDialog from './GeracaoLoteDialog'
+import CamposFaltantesPanel from './CamposFaltantesPanel'
 
-const extractMetaIds = (row) => (row?.MetaVinculos || []).map(v => v.IdMetaRelacionado).filter(Boolean)
+const XML_ASN_KWS = ['xml-asn', 'xmlasn', 'desadv', 'asn', '856', '004']
+
+/**
+ * Ids para ConteudoArquivo / parse XML-ASN.
+ * Preferência: IdMetaArquivoReferenciado (API SwPaaS) → IdMeta da mensagem → vínculos.
+ */
+const extractMetaIds = (row) => {
+  const ids = []
+  const push = (v) => {
+    const n = Number(v)
+    if (Number.isFinite(n) && n > 0 && !ids.includes(n)) ids.push(n)
+  }
+
+  // ConteudoArquivo usa tipicamente IdMetaArquivoReferenciado
+  push(row?.IdMetaArquivoReferenciado)
+
+  const nome = `${row?.NomeMensagemEDI || ''} ${row?.NomePadraoEDI || ''} ${row?.tipo || ''}`.toLowerCase()
+  const isXmlAsnMsg = XML_ASN_KWS.some(k => nome.includes(k))
+  if (isXmlAsnMsg) push(row?.IdMeta)
+  else push(row?.IdMeta)
+
+  ;(row?.MetaVinculos || []).forEach(v => push(v.IdMetaRelacionado || v.IdMeta))
+  return ids
+}
 
 /**
  * EtiquetasTab Orchestrator
  *
- * @param {object} row - Registro do intercâmbio (obrigatório)
- * @param {string} mode - 'dark' | 'light' (legacy support)
- * @param {object} customColors - Possibilidade de injetar cores para adaptar a outro sistema
- * @param {object} avisoItem - Pré-popula lista (legacy support)
+ * Fluxo XML-ASN (mensagem EDI): parse máximo + mapa de campos faltantes + fill manual / Gerar Lote UC.
+ * Fluxo procNFe permanece no AvisoEmbarqueTab — não é alterado aqui.
  */
 export default function EtiquetasTab({ row, mode = 'light', customColors = {}, avisoItem }) {
   const theme = useMemo(() => getEtiquetasTheme(mode, customColors), [mode, customColors])
+  const fileInputRef = useRef(null)
 
   const [items, setItems] = useState(() => {
     if (avisoItem) {
@@ -51,6 +74,9 @@ export default function EtiquetasTab({ row, mode = 'light', customColors = {}, a
   const [xmlRaw, setXmlRaw] = useState(null)
   const [xmlLoading, setXmlLoading] = useState(false)
   const [xmlError, setXmlError] = useState(null)
+  const [parseResumo, setParseResumo] = useState(null)
+  const [missingOpen, setMissingOpen] = useState(true)
+  const [highlightField, setHighlightField] = useState(null)
 
   const [tplOpen, setTplOpen] = useState(false)
   const [loteOpen, setLoteOpen] = useState(false)
@@ -64,14 +90,68 @@ export default function EtiquetasTab({ row, mode = 'light', customColors = {}, a
   const chaveAcesso = row?.XML_ChaveDocumentoFiscal || row?.IdMeta?.toString() || ''
   const aliasEmitente = row?.AliasEntidadeEmissora || ''
   const aliasDestinatario = row?.AliasEntidadeDeDestino || row?.AliasEntidadeOwner || ''
-  const metaIds = extractMetaIds(row)
+  const metaIds = useMemo(() => extractMetaIds(row), [row])
+  // ref estável para evitar ciclo applyParsed ↔ refreshMissingMap
+  const refreshMissingMapRef = useRef(async () => {})
+
+  const applyParsed = useCallback((parsed, { mergeSaved = true } = {}) => {
+    if (!parsed) return
+    setXmlRaw(parsed.xmlRaw || null)
+    setParseResumo(parsed.resumo || null)
+
+    const exp = parsed.expedicao || {}
+    setExpedicao({
+      doca: exp.doca || '',
+      fabrica: exp.fabrica || '',
+      clienteCodigo: exp.clienteCodigo || '',
+      numDocto: exp.numDocto || row?.NumeroDocto || '',
+      localEntrega: exp.localEntrega || '',
+    })
+
+    const parsedItems = (parsed.items || []).map(it => ({
+      occ: it.occ,
+      produtoLocal: it.produtoLocal || '',
+      produtoCliente: it.produtoCliente || '',
+      qtdFaturada: it.qtdFaturada || '0',
+      numPedido: it.numPedido || '',
+      totalDefaultUcsPorUm: it.totalDefaultUcsPorUm || '',
+      source: 'xml-asn',
+    }))
+
+    if (parsedItems.length > 0) {
+      setItems(parsedItems)
+      setSelOcc(prev => prev || parsedItems[0].occ)
+    }
+
+    const fromXml = (parsed.etiquetas || []).map(e => ({
+      ...e,
+      selected: e.selected !== false,
+    }))
+
+    setEtiquetas(prev => {
+      // Persistência local tem prioridade; reavalia gaps no mapa
+      if (mergeSaved && prev.length > 0) {
+        Promise.resolve().then(() => refreshMissingMapRef.current(prev))
+        return prev
+      }
+      return fromXml
+    })
+
+    if (parsed.resumo?.precisaGerarLoteUc || parsed.resumo?.precisaPreencherManual || fromXml.length === 0) {
+      setMissingOpen(true)
+    }
+  }, [row?.NumeroDocto])
 
   useEffect(() => {
     if (!chaveAcesso) return
     setLoading(true)
     fetch(`/api/labels/nfes/${chaveAcesso}`)
       .then(r => r.json())
-      .then(d => setEtiquetas(d.etiquetas || []))
+      .then(d => {
+        if (Array.isArray(d.etiquetas) && d.etiquetas.length > 0) {
+          setEtiquetas(d.etiquetas)
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [chaveAcesso])
@@ -81,75 +161,54 @@ export default function EtiquetasTab({ row, mode = 'light', customColors = {}, a
     setXmlLoading(true)
     setXmlError(null)
     try {
-      const res = await fetch('/api/labels/xml-asn', {
+      const res = await fetch('/api/labels/xml-asn/parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ meta_ids: metaIds }),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const text = await res.text()
-      setXmlRaw(text)
-
-      const doc = new DOMParser().parseFromString(text, 'application/xml')
-      const docaRaw    = doc.getElementsByTagName('DbDoca')[0]?.textContent || ''
-      const fabRaw     = doc.getElementsByTagName('DbFabricaCliente')[0]?.textContent || ''
-      const clieRaw    = doc.getElementsByTagName('DbSWEDI_ClienteCodigo')[0]?.textContent || ''
-      const numDocRaw  = doc.getElementsByTagName('DbNumNFEmitente')[0]?.textContent ||
-                         doc.getElementsByTagName('DbNumDocto')[0]?.textContent ||
-                         doc.getElementsByTagName('DbNumeroPedidoEmitente')[0]?.textContent ||
-                         row?.NumeroDocto || ''
-      setExpedicao({ doca: docaRaw, fabrica: fabRaw, clienteCodigo: clieRaw, numDocto: numDocRaw })
-
-      const xmlItems = Array.from(doc.getElementsByTagName('Tb_ASNItem'))
-      const parsed = xmlItems.map(xItem => ({
-        occ:             xItem.getElementsByTagName('DbItOcc')[0]?.textContent || '',
-        produtoLocal:    xItem.getElementsByTagName('DbItProdutoLocal')[0]?.textContent || '',
-        produtoCliente:  xItem.getElementsByTagName('DbItProdutoCliente')[0]?.textContent || '',
-        qtdFaturada:     xItem.getElementsByTagName('DbItQtdFaturada')[0]?.textContent || '0',
-      }))
-
-      if (parsed.length > 0) {
-        setItems(parsed)
-        setSelOcc(prev => prev || parsed[0].occ)
-
-        setEtiquetas(prev => {
-          if (prev.length > 0) return prev
-          const etqsXml = []
-          xmlItems.forEach(xItem => {
-            const occ = xItem.getElementsByTagName('DbItOcc')[0]?.textContent || ''
-            Array.from(xItem.getElementsByTagName('Tb_ASNItemEtiqueta')).forEach(etq => {
-              etqsXml.push({
-                id:               Math.random().toString(36).slice(2, 9),
-                itemOcc:          occ,
-                selected:         true,
-                numeroUM:         etq.getElementsByTagName('DbEtqNroEtiquetaUnidadeMovimentacao')[0]?.textContent || '',
-                numeroUC:         etq.getElementsByTagName('DbEtqNroEtiquetaUnidadeCondicionamento')[0]?.textContent || '',
-                codigoEmbalagemUC: etq.getElementsByTagName('DbEtqCodigoEmbalagemUC')[0]?.textContent || '',
-                quantidadePecasUC: etq.getElementsByTagName('DbEtqQuantidadeDePecasNaUC')[0]?.textContent || '',
-                localUtilizacao:  etq.getElementsByTagName('DbEtqPontoDeUso')[0]?.textContent || '',
-                lote:             etq.getElementsByTagName('DbEtqLoteFabricacao')[0]?.textContent || '',
-                numeroDocumento:  etq.getElementsByTagName('DbEtqTextoLivre')[0]?.textContent || '',
-                dataFabricacao:   etq.getElementsByTagName('DbEtqDtFabricacao')[0]?.textContent || '',
-                doca:             etq.getElementsByTagName('DbEtqDoca')[0]?.textContent || '',
-                ran:              etq.getElementsByTagName('DbEtqCallDelivery')[0]?.textContent || '',
-                codigoEmbalagemUM: '',
-                dataDe: '', crossDock: '',
-              })
-            })
-          })
-          return etqsXml
-        })
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}))
+        throw new Error(errBody.detail || `HTTP ${res.status}`)
       }
+      const parsed = await res.json()
+      applyParsed(parsed)
     } catch (err) {
       setXmlError(err.message)
     } finally {
       setXmlLoading(false)
     }
-  }, [metaIds, xmlRaw, xmlLoading, row?.NumeroDocto])
+  }, [metaIds, xmlRaw, xmlLoading, applyParsed])
 
   useEffect(() => {
     if (metaIds.length > 0 && !xmlRaw && !xmlLoading) loadXmlAsn()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const refreshMissingMap = useCallback(async (list) => {
+    try {
+      const res = await fetch('/api/labels/xml-asn/map-missing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ etiquetas: list }),
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      setParseResumo(prev => ({
+        ...(prev || {}),
+        camposFaltantesAgregados: data.camposFaltantesAgregados || [],
+        etiquetasIncompletas: data.etiquetasIncompletas || 0,
+        etiquetasCompletas: data.etiquetasCompletas || 0,
+        precisaPreencherManual: (data.etiquetasIncompletas || 0) > 0,
+        totalEtiquetas: list.length,
+        itensSemEtiqueta: prev?.itensSemEtiqueta || [],
+        precisaGerarLoteUc: (prev?.itensSemEtiqueta || []).length > 0 && list.length === 0,
+      }))
+      setEtiquetas(data.etiquetas || list)
+    } catch {
+      /* mapa é auxiliar — não bloqueia edição */
+    }
+  }, [])
+
+  refreshMissingMapRef.current = refreshMissingMap
 
   const saveToDb = useCallback(async (toSave) => {
     if (!chaveAcesso) return
@@ -169,20 +228,48 @@ export default function EtiquetasTab({ row, mode = 'light', customColors = {}, a
     }
   }, [chaveAcesso, etiquetas])
 
+  const handleUploadXmlAsn = async (file) => {
+    if (!file) return
+    setXmlLoading(true)
+    setXmlError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/labels/xml-asn/parse-upload', { method: 'POST', body: fd })
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}))
+        throw new Error(errBody.detail || `HTTP ${res.status}`)
+      }
+      const parsed = await res.json()
+      applyParsed(parsed, { mergeSaved: false })
+      setSaveMsg({ type: 'success', text: `XML-ASN carregado: ${file.name}` })
+    } catch (err) {
+      setXmlError(err.message)
+    } finally {
+      setXmlLoading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
   const handleAddManual = () => {
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '/')
     const occ = selectedItemOcc || '1'
     const numDocto = expedicao.numDocto || row?.NumeroDocto || ''
-    setEtiquetas(prev => [...prev, {
-      id: Math.random().toString(36).slice(2, 9),
-      itemOcc: occ, selected: true,
-      numeroUM: '', numeroUC: '',
-      quantidadePecasUC: '0', codigoEmbalagemUC: '',
-      codigoEmbalagemUM: '', localUtilizacao: '',
-      doca: expedicao.doca || '', ran: '', lote: '',
-      dataFabricacao: today, dataDe: '', crossDock: '',
-      numeroDocumento: numDocto,
-    }])
+    setEtiquetas(prev => {
+      const next = [...prev, {
+        id: Math.random().toString(36).slice(2, 9),
+        itemOcc: occ, selected: true,
+        numeroUM: '', numeroUC: '',
+        quantidadePecasUC: '0', codigoEmbalagemUC: '',
+        codigoEmbalagemUM: '', localUtilizacao: '',
+        doca: expedicao.doca || '', ran: '', lote: '',
+        dataFabricacao: today, dataDe: '', crossDock: '',
+        numeroDocumento: numDocto,
+        source: 'manual',
+      }]
+      refreshMissingMap(next)
+      return next
+    })
   }
 
   const handleOpenNovoProduto = () => { setEditingProduto(null); setProdutoDialogOpen(true) }
@@ -218,16 +305,28 @@ export default function EtiquetasTab({ row, mode = 'light', customColors = {}, a
     setEtiquetas(prev => {
       const updated = [...prev, ...novas]
       saveToDb(updated)
+      refreshMissingMap(updated)
       return updated
     })
-  }, [saveToDb])
+  }, [saveToDb, refreshMissingMap])
 
-  const handleDelete = (id) => setEtiquetas(prev => prev.filter(e => e.id !== id))
+  const handleDelete = (id) => {
+    setEtiquetas(prev => {
+      const next = prev.filter(e => e.id !== id)
+      refreshMissingMap(next)
+      return next
+    })
+  }
   const handleToggleSelected = (id, val) => setEtiquetas(prev => prev.map(e => e.id === id ? { ...e, selected: val } : e))
-  const handleUpdateEtiqueta = useCallback((row, values) => {
-    const id = row.original.id
-    setEtiquetas(prev => prev.map(e => e.id === id ? { ...e, ...values } : e))
-  }, [])
+  const handleUpdateEtiqueta = useCallback((rowRef, values) => {
+    const id = rowRef.original?.id ?? rowRef.id
+    setEtiquetas(prev => {
+      const next = prev.map(e => e.id === id ? { ...e, ...values } : e)
+      // debounce leve via microtask — reavalia mapa após edição celular
+      Promise.resolve().then(() => refreshMissingMap(next))
+      return next
+    })
+  }, [refreshMissingMap])
 
   const currentItem = items.find(i => i.occ === selectedItemOcc)
   const currentEtiquetas = etiquetas.filter(e => e.itemOcc === (selectedItemOcc || e.itemOcc))
@@ -261,8 +360,25 @@ export default function EtiquetasTab({ row, mode = 'light', customColors = {}, a
     setPrintOpen(true)
   }
 
+  const handleFocusMissingField = (fieldKey) => {
+    setHighlightField(fieldKey)
+    // Preferir item que tenha gap nesse campo
+    const target = etiquetas.find(e =>
+      (e.camposFaltantes || []).some(m => m.key === fieldKey)
+    )
+    if (target?.itemOcc) setSelOcc(target.itemOcc)
+  }
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".edi,.xml,application/xml,text/xml"
+        style={{ display: 'none' }}
+        onChange={(e) => handleUploadXmlAsn(e.target.files?.[0])}
+      />
+
       <EtiquetasToolbar
         theme={theme}
         xmlLoading={xmlLoading}
@@ -276,10 +392,13 @@ export default function EtiquetasTab({ row, mode = 'light', customColors = {}, a
         allSelectedCount={allSelectedCount}
         saving={saving}
         etiquetasCount={etiquetas.length}
+        parseResumo={parseResumo}
         onOpenTemplateSelector={() => setTplOpen(true)}
         onViewer={handleViewer}
         onPrint={handlePrint}
         onSave={() => saveToDb()}
+        onUploadClick={() => fileInputRef.current?.click()}
+        onShowMissing={() => setMissingOpen(v => !v)}
       />
 
       {saveMsg && (
@@ -288,6 +407,15 @@ export default function EtiquetasTab({ row, mode = 'light', customColors = {}, a
           {saveMsg.text}
         </Alert>
       )}
+
+      <CamposFaltantesPanel
+        theme={theme}
+        resumo={parseResumo}
+        open={missingOpen}
+        onToggle={() => setMissingOpen(v => !v)}
+        onGerarLote={() => setLoteOpen(true)}
+        onFocusField={handleFocusMissingField}
+      />
 
       <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <ProductList
@@ -316,6 +444,7 @@ export default function EtiquetasTab({ row, mode = 'light', customColors = {}, a
           currentVol={currentVol}
           volExcedido={volExcedido}
           volCompleto={volCompleto}
+          highlightField={highlightField}
           onAddManual={handleAddManual}
           onLoteOpen={() => setLoteOpen(true)}
           handleDelete={handleDelete}

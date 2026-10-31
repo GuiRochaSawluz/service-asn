@@ -26,6 +26,7 @@ import { useUmbrellaColors } from './useUmbrellaColors'
 import { getAppPathname } from './satellitePath'
 
 const AvisoEmbarqueTab = lazy(() => import('./AvisoEmbarqueTab'))
+const EtiquetasTab = lazy(() => import('./EtiquetasTab'))
 
 // Proxy Vite encaminha /api/* → :8002 — não precisamos de URL absoluta em dev
 const API_BASE = import.meta.env.VITE_ASN_API_URL || ''
@@ -123,22 +124,37 @@ async function openAsnSession(token) {
   return { ok: false, detail: detail || `HTTP ${res.status}` }
 }
 
+/** view=etiquetas → aba Etiqueta (XML-ASN); default → Aviso de Embarque (procNFe) */
+function getViewFromUrl() {
+  const p = new URLSearchParams(window.location.search)
+  const raw = (p.get('view') || p.get('tab') || '').toLowerCase()
+  if (raw === 'etiquetas' || raw === 'etiqueta' || raw === 'labels') return 'etiquetas'
+  return 'aviso'
+}
+
 // ── Lê todos os parâmetros de contexto da query string
-// O monolito (DetailsModal.jsx) passa esses campos no iframe src
+// O monolito / SW2 passa esses campos no iframe src
 function getRowFromUrl() {
   const p = new URLSearchParams(window.location.search)
   const idMeta    = p.get('idMeta')    || p.get('id_meta')    || ''
   const idMetaRef = p.get('idMetaRef') || p.get('id_meta_ref') || ''
   const pathNuvem = p.get('pathNuvem') || p.get('path_nuvem') || ''
+  const nomeMsg   = p.get('nomeMensagem') || p.get('NomeMensagemEDI') || ''
+  const nomePadrao = p.get('nomePadrao') || p.get('NomePadraoEDI') || ''
+  const view = getViewFromUrl()
   return {
     IdMeta:                    idMeta,
     IdMetaArquivoReferenciado: idMetaRef || null,
     PathArquivoNuvem:          pathNuvem || null,
     AliasEntidadeEmissora:     p.get('aliasEmissora') || '',
     AliasEntidadeOwner:        p.get('aliasOwner')    || '',
+    AliasEntidadeDeDestino:    p.get('aliasDestino')  || '',
     DtHrIntercambio:           p.get('dthr')          || '',
-    NumeroDocto:               '',
-    XML_ChaveDocumentoFiscal:  '',
+    NumeroDocto:               p.get('numeroDocto')   || '',
+    XML_ChaveDocumentoFiscal:  p.get('chaveNfe')      || '',
+    NomeMensagemEDI:           nomeMsg || (view === 'etiquetas' ? 'XML-ASN' : ''),
+    NomePadraoEDI:             nomePadrao || '',
+    tipo:                      view === 'etiquetas' ? 'xml-asn' : '',
   }
 }
 
@@ -456,11 +472,13 @@ function MigrationsAdminScreen() {
   )
 }
 
-// ── Tela do AvisoEmbarqueTab (ocupa 100% da viewport) ────────────────────────
+// ── Tela ASN (Aviso procNFe OU Etiquetas XML-ASN) ────────────────────────────
 function AsnScreen({ row, onBack, mode }) {
-  // Detecta se está rodando dentro de um iframe (ex: embutido no DetailsModal)
+  // Detecta se está rodando dentro de um iframe (ex: embutido no DetailsModal / SW2)
   const isEmbedded = window.self !== window.top
   const idMeta = row?.IdMeta || ''
+  const view = getViewFromUrl()
+  const isEtiquetas = view === 'etiquetas'
 
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
@@ -474,7 +492,7 @@ function AsnScreen({ row, onBack, mode }) {
         }}>
           <LocalShippingIcon sx={{ color: 'primary.main', fontSize: 14 }} />
           <Typography sx={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: '0.4px', textTransform: 'uppercase' }}>
-            ASN Service
+            ASN Service · {isEtiquetas ? 'Etiquetas' : 'Aviso de Embarque'}
           </Typography>
           <Typography sx={{ fontSize: 10, color: '#2a2d35', mx: 0.3 }}>·</Typography>
           <Typography sx={{ fontSize: 10, color: '#333', fontFamily: 'monospace' }}>
@@ -489,18 +507,21 @@ function AsnScreen({ row, onBack, mode }) {
         </Box>
       )}
 
-      {/* O AvisoEmbarqueTab ocupa todo o restante — igual ao DetailsModal */}
-      <Box sx={{ flex: 1, overflow: 'auto' }}>
+      <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
         <Suspense fallback={
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
             <CircularProgress color="primary" />
           </Box>
         }>
-          <AvisoEmbarqueTab
-            row={row}
-            mode={mode}
-            apiBaseUrl={API_BASE}
-          />
+          {isEtiquetas ? (
+            <EtiquetasTab row={row} mode={mode} />
+          ) : (
+            <AvisoEmbarqueTab
+              row={row}
+              mode={mode}
+              apiBaseUrl={API_BASE}
+            />
+          )}
         </Suspense>
       </Box>
     </Box>

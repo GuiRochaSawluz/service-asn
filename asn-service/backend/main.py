@@ -16,6 +16,9 @@ Endpoints:
   POST   /api/labels/nfes/{chave_acesso}/save
   POST   /api/labels/sequence/generate
   POST   /api/labels/xml-asn
+  POST   /api/labels/xml-asn/parse
+  POST   /api/labels/xml-asn/parse-upload
+  POST   /api/labels/xml-asn/map-missing
   POST   /api/labels/render
   GET    /api/swpaas/mrt-file/{version_id}
   GET    /api/labels/mrt/{filename}
@@ -42,7 +45,7 @@ import time
 
 from dotenv import load_dotenv
 import httpx
-from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query, Request, Response, status
+from fastapi import Cookie, Depends, FastAPI, File, Header, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
@@ -59,6 +62,7 @@ from models import (
     GerarRequest,
     GerarResponse,
 )
+from xml_asn_parser import map_missing_fields, parse_xml_asn
 
 logger = logging.getLogger("asn")
 
@@ -1380,34 +1384,96 @@ def generate_label_sequence(req: SequenceRequest):
 # ── XML-ASN via SwPaaS ConteudoArquivo ──────────────────────────────────────
 
 class XmlAsnRequest(BaseModel):
-    meta_ids: list[int]
+    meta_ids: list[int] = []
 
 
-@app.post("/api/labels/xml-asn", tags=["Etiquetas"])
-async def get_labels_xml_asn(payload: XmlAsnRequest):
-    """
-    Obtém o XML-ASN vinculado via SwPaaS ConteudoArquivo.
-    Tenta cada IdMeta fornecido com tipo='edi' até encontrar um arquivo ASN/DESADV válido.
-    """
-    from fastapi.responses import Response as FastResponse
+class MapMissingFieldsRequest(BaseModel):
+    etiquetas: list[dict]
 
-    if not payload.meta_ids:
+
+async def _fetch_xml_asn_content(meta_ids: list[int]) -> str:
+    """Baixa o primeiro conteúdo EDI válido entre os meta_ids (mensagem XML-ASN)."""
+    if not meta_ids:
         raise HTTPException(status_code=400, detail="meta_ids é obrigatório")
 
     last_err = "Nenhum meta_id retornou arquivo válido."
-    for mid in payload.meta_ids:
+    for mid in meta_ids:
         try:
             content = await swpaas.get_conteudo_arquivo(mid, tipo="edi")
             if content and len(content.strip()) > 10:
-                return FastResponse(
-                    content=content.encode("utf-8"),
-                    media_type="application/xml",
-                )
+                return content if isinstance(content, str) else content.decode("utf-8", errors="replace")
+        except Exception as e:
+            last_err = str(e)
+            continue
+        try:
+            content = await swpaas.get_conteudo_arquivo(mid, tipo="xml")
+            if content and len(content.strip()) > 10:
+                return content if isinstance(content, str) else content.decode("utf-8", errors="replace")
         except Exception as e:
             last_err = str(e)
             continue
 
     raise HTTPException(status_code=404, detail=f"XML-ASN não encontrado. {last_err}")
+
+
+@app.post("/api/labels/xml-asn", tags=["Etiquetas"])
+async def get_labels_xml_asn(payload: XmlAsnRequest):
+    """
+    Obtém o XML-ASN bruto via SwPaaS ConteudoArquivo.
+    Aceita IdMeta da própria mensagem XML-ASN ou vínculos (MetaVinculos).
+    Não interfere no fluxo procNFe / Aviso de Embarque.
+    """
+    from fastapi.responses import Response as FastResponse
+
+    content = await _fetch_xml_asn_content(payload.meta_ids)
+    return FastResponse(
+        content=content.encode("utf-8"),
+        media_type="application/xml",
+    )
+
+
+@app.post("/api/labels/xml-asn/parse", tags=["Etiquetas"])
+async def parse_labels_xml_asn(payload: XmlAsnRequest):
+    """
+    Baixa o XML-ASN e retorna itens/etiquetas + mapa de campos faltantes (UC/UM).
+    Usado pela aba Etiqueta para pré-preencher e orientar preenchimento manual.
+    """
+    content = await _fetch_xml_asn_content(payload.meta_ids)
+    try:
+        parsed = parse_xml_asn(content)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    parsed["xmlRaw"] = content
+    return parsed
+
+
+@app.post("/api/labels/xml-asn/parse-upload", tags=["Etiquetas"])
+async def parse_labels_xml_asn_upload(file: UploadFile = File(...)):
+    """
+    Parse de arquivo mensagem XML-ASN (.edi / .xml) enviado pelo usuário.
+    Mesmo contrato de /parse — útil para testes e entrada local na aba Etiqueta.
+    """
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1", errors="replace")
+    try:
+        parsed = parse_xml_asn(text)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    parsed["xmlRaw"] = text
+    parsed["fileName"] = file.filename
+    return parsed
+
+
+@app.post("/api/labels/xml-asn/map-missing", tags=["Etiquetas"])
+async def map_labels_missing_fields(payload: MapMissingFieldsRequest):
+    """
+    Reavalia campos de etiqueta não preenchidos (UC/UM e demais)
+    após edição manual do usuário.
+    """
+    return map_missing_fields(payload.etiquetas or [])
 
 
 # ── Entrypoint ───────────────────────────────────────────────────────────────────

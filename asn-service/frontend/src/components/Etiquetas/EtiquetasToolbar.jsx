@@ -1,27 +1,37 @@
-import { Box, Chip, Button, CircularProgress } from '@mui/material'
+import { Box, Chip, Button, CircularProgress, Tooltip } from '@mui/material'
 import LabelIcon from '@mui/icons-material/Label'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import PrintIcon from '@mui/icons-material/Print'
 import SaveIcon from '@mui/icons-material/Save'
+import UploadFileIcon from '@mui/icons-material/UploadFile'
+import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 
-export default function EtiquetasToolbar({ 
-  theme, 
-  xmlLoading, 
-  xmlRaw, 
-  xmlError, 
-  itemsCount, 
-  metaIds, 
-  aliasEmitente, 
-  aliasDestinatario, 
-  selectedTemplate, 
-  allSelectedCount, 
-  saving, 
+export default function EtiquetasToolbar({
+  theme,
+  xmlLoading,
+  xmlRaw,
+  xmlError,
+  itemsCount,
+  metaIds,
+  aliasEmitente,
+  aliasDestinatario,
+  selectedTemplate,
+  allSelectedCount,
+  saving,
   etiquetasCount,
-  onOpenTemplateSelector, 
+  parseResumo,
+  onOpenTemplateSelector,
   onViewer,
   onPrint,
-  onSave 
+  onSave,
+  onUploadClick,
+  onShowMissing,
 }) {
+  const gaps =
+    (parseResumo?.gapsCriticos || 0) +
+    (parseResumo?.gapsImportantes || 0) +
+    (parseResumo?.itensSemEtiqueta?.length || 0)
+
   return (
     <Box sx={{
       display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center',
@@ -39,12 +49,21 @@ export default function EtiquetasToolbar({
           sx={{ fontSize: 10, bgcolor: theme.successBg, color: theme.success }} />
       )}
       {!xmlRaw && !xmlLoading && metaIds.length === 0 && (
-        <Chip label="Sem XML-ASN — entrada manual" size="small"
+        <Chip label="Sem XML-ASN — entrada manual ou upload" size="small"
           sx={{ fontSize: 10, bgcolor: theme.warningBg, color: theme.warning, border: `1px solid ${theme.warning}44` }} />
       )}
       {xmlError && (
         <Chip label="XML-ASN indisponível — modo manual" size="small"
           sx={{ fontSize: 10, bgcolor: theme.dangerBg, color: theme.danger }} />
+      )}
+      {gaps > 0 && (
+        <Chip
+          icon={<WarningAmberIcon sx={{ fontSize: '14px !important' }} />}
+          label={`${gaps} gap(s) UC/campos`}
+          size="small"
+          onClick={onShowMissing}
+          sx={{ fontSize: 10, cursor: 'pointer', bgcolor: theme.warningBg, color: theme.warning, fontWeight: 700 }}
+        />
       )}
       {aliasEmitente && (
         <Chip label={`Emit: ${aliasEmitente}`} size="small"
@@ -56,6 +75,19 @@ export default function EtiquetasToolbar({
       )}
 
       <Box sx={{ flex: 1 }} />
+
+      <Tooltip title="Carregar mensagem XML-ASN (.edi / .xml)" arrow>
+        <Button size="small" variant="outlined"
+          startIcon={<UploadFileIcon fontSize="small" />}
+          onClick={onUploadClick}
+          sx={{
+            textTransform: 'none', fontSize: 11, py: 0.4,
+            borderColor: theme.borderInput, color: theme.textMuted,
+            '&:hover': { borderColor: theme.primary, color: theme.primary },
+          }}>
+          XML-ASN
+        </Button>
+      </Tooltip>
 
       <Button size="small"
         variant={selectedTemplate ? 'contained' : 'outlined'}
